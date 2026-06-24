@@ -1134,6 +1134,21 @@ createApp({
       reader.readAsText(file);
     },
 
+    subscribeRealtime(){
+      const vm = this;
+      window._sb
+        .channel('db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'influencers' }, async () => {
+          const { data } = await window._sb.from('influencers').select('id,data');
+          if(data) vm.influencers = data.map(r => ({ ...r.data, id: r.id }));
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, async () => {
+          const { data } = await window._sb.from('customers').select('id,data');
+          if(data) vm.customers = data.map(r => ({ ...r.data, id: r.id }));
+        })
+        .subscribe();
+    },
+
     seed(){
       const C=(id,o)=>Object.assign({id,servicesInterested:[],hasAsset:false,hasGenCode:false,influencerHistory:[],totalBudgetSpent:0,remainingBalance:0,type:'Lead',pipelineStatus:'New Customer'},o);
       this.customers=[
@@ -1222,7 +1237,8 @@ createApp({
 
   async mounted(){
     if(!await this.load()) this.seed();
-  }
+    this.subscribeRealtime();
+  },
 }).mount('#app');
 </script>
 <script>
