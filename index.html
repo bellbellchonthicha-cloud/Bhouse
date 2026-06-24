@@ -307,6 +307,7 @@ tailwind.config = {
                 <div class="flex rounded-xl bg-brand-50 p-1">
                   <button @click="dirView='table'" class="px-3 py-1.5 rounded-lg text-xs font-500 transition" :class="dirView==='table'?'bg-white shadow-sm text-brand-700':'text-ink-500'">ตาราง</button>
                   <button @click="dirView='grid'" class="px-3 py-1.5 rounded-lg text-xs font-500 transition" :class="dirView==='grid'?'bg-white shadow-sm text-brand-700':'text-ink-500'">การ์ด</button>
+                  <button @click="dirView='cat'" class="px-3 py-1.5 rounded-lg text-xs font-500 transition" :class="dirView==='cat'?'bg-white shadow-sm text-brand-700':'text-ink-500'">ตามประเภท</button>
                 </div>
                 <button @click="openForm(null,false)" class="px-4 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-600 hover:bg-brand-600 shadow-soft transition flex items-center gap-1.5">
                   <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
@@ -322,7 +323,7 @@ tailwind.config = {
                 <option value="">ทุกแพลตฟอร์ม</option><option v-for="p in platforms" :key="p">{{ p }}</option>
               </select>
               <select v-model="fCategory" class="filter-sel">
-                <option value="">ทุกประเภท</option><option v-for="c in categories" :key="c">{{ c }}</option>
+                <option value="">ทุกประเภท</option><option v-for="c in allCategories" :key="c">{{ c }}</option>
               </select>
               <select v-model="fRate" class="filter-sel">
                 <option value="">ทุกช่วงราคา</option>
@@ -357,7 +358,7 @@ tailwind.config = {
                       <div v-html="avatarHtml(inf,9)"></div>
                       <div>
                         <p class="font-600 leading-tight">{{ inf.nickname }}</p>
-                        <p class="text-[11px] text-ink-500">{{ inf.category }} · {{ inf.tier }}</p>
+                        <p class="text-[11px] text-ink-500">{{ infCats(inf).join(', ') || '—' }} · {{ inf.tier }}</p>
                       </div>
                     </div>
                   </td>
@@ -376,6 +377,29 @@ tailwind.config = {
             </table>
           </div>
 
+          <!-- category view (แยกตามประเภท) -->
+          <div v-else-if="dirView==='cat'" class="space-y-5">
+            <div v-for="g in groupedByCategory" :key="g.name" class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="w-1.5 h-5 rounded-full bg-brand-500"></span>
+                <h3 class="font-600 text-base">{{ g.name }}</h3>
+                <span class="text-xs font-600 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">{{ g.items.length }} คน</span>
+              </div>
+              <div class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <div v-for="inf in g.items" :key="inf.id" @click="openProfile(inf)"
+                  class="flex items-center gap-3 rounded-xl border border-brand-50 p-3 hover:border-brand-300 hover:bg-brand-50/40 transition cursor-pointer">
+                  <div v-html="avatarHtml(inf,11)"></div>
+                  <div class="min-w-0 flex-1">
+                    <p class="font-600 text-sm leading-tight truncate">{{ inf.nickname }}</p>
+                    <p class="text-[11px] text-ink-500 truncate">{{ inf.tier }} · {{ inf.mainPlatform }}</p>
+                    <p class="text-[11px] font-600 text-brand-600">฿{{ fmt(inf.startingRate) }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-if="!groupedByCategory.length" class="bg-white rounded-2xl p-10 text-center text-ink-500 text-sm shadow-soft border border-brand-50">ไม่พบรายชื่อที่ตรงกับเงื่อนไข</div>
+          </div>
+
           <!-- grid view -->
           <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <div v-for="inf in filteredMain" :key="inf.id" @click="openProfile(inf)"
@@ -387,7 +411,7 @@ tailwind.config = {
               <p class="font-600 mt-3 leading-tight">{{ inf.nickname }}</p>
               <p class="text-xs text-ink-500">{{ inf.fullName }}</p>
               <div class="flex flex-wrap gap-1.5 mt-2">
-                <span class="text-[11px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">{{ inf.category }}</span>
+                <span v-for="c in infCats(inf)" :key="c" class="text-[11px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">{{ c }}</span>
                 <span class="text-[11px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">{{ inf.tier }}</span>
               </div>
               <div class="flex items-center justify-between mt-4 pt-3 border-t border-brand-50">
@@ -476,7 +500,7 @@ tailwind.config = {
                       </div>
                     </div>
                   </td>
-                  <td class="py-3 px-3"><span class="text-[11px] px-2 py-1 rounded-lg bg-brand-100 text-brand-700">{{ inf.tag || inf.category }}</span></td>
+                  <td class="py-3 px-3"><span class="text-[11px] px-2 py-1 rounded-lg bg-brand-100 text-brand-700">{{ inf.tag || infCats(inf).join(', ') || '—' }}</span></td>
                   <td class="py-3 px-3"><span class="text-xs px-2 py-1 rounded-lg bg-brand-50 text-brand-700">{{ inf.mainPlatform }}</span></td>
                   <td class="py-3 px-3 font-500">{{ fmtFollowers(mainFollowers(inf)) }}</td>
                   <td class="py-3 px-3 text-xs" :class="isOverdue(inf)?'text-brand-600 font-600':'text-ink-500'">
@@ -634,7 +658,7 @@ tailwind.config = {
         </div>
 
         <div class="flex flex-wrap gap-2 mt-4">
-          <span class="text-xs px-2.5 py-1 rounded-full bg-brand-50 text-brand-700">{{ profile.category }}</span>
+          <span v-for="c in infCats(profile)" :key="c" class="text-xs px-2.5 py-1 rounded-full bg-brand-50 text-brand-700">{{ c }}</span>
           <span class="text-xs px-2.5 py-1 rounded-full bg-brand-50 text-brand-700">{{ profile.tier }}</span>
           <span class="text-xs px-2.5 py-1 rounded-full bg-brand-50 text-brand-700">{{ profile.mainPlatform }}</span>
           <span v-if="!profile.isPool" class="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-600">Workflow: {{ profile.campaignStatus }}</span>
@@ -737,11 +761,40 @@ tailwind.config = {
         <div class="grid sm:grid-cols-2 gap-3">
           <div><label class="lbl">ชื่อจริง-นามสกุล</label><input v-model="form.fullName" class="inp"></div>
           <div><label class="lbl">ชื่อในวงการ/ชื่อเล่น *</label><input v-model="form.nickname" class="inp"></div>
-          <div><label class="lbl">รูปโปรไฟล์ (URL)</label><input v-model="form.avatar" class="inp" placeholder="วาง URL หรือเว้นว่างเพื่อใช้ตัวอักษร"></div>
-          <div><label class="lbl">ประเภท (Category)</label>
-            <input v-model="form.category" list="catlist" class="inp">
-            <datalist id="catlist"><option v-for="c in categories" :key="c">{{ c }}</option></datalist>
+
+          <!-- รูปโปรไฟล์: อัปโหลดจากเครื่อง หรือวาง URL ถ้าไม่มีจะแสดงเป็นตัวอักษร -->
+          <div class="sm:col-span-2">
+            <label class="lbl">รูปโปรไฟล์</label>
+            <div class="flex items-center gap-3">
+              <div v-html="avatarHtml(form,14)"></div>
+              <div class="flex-1 space-y-2">
+                <div class="flex gap-2">
+                  <button type="button" @click="$refs.avatarFile.click()" class="px-3 py-2 rounded-xl bg-brand-50 text-brand-700 text-sm font-500 hover:bg-brand-100 transition">อัปโหลดรูป</button>
+                  <button v-if="form.avatar" type="button" @click="clearAvatar" class="px-3 py-2 rounded-xl border border-brand-100 text-ink-700 text-sm font-500 hover:bg-brand-50 transition">ลบรูป</button>
+                  <input ref="avatarFile" type="file" accept="image/*" class="hidden" @change="onAvatarFile">
+                </div>
+                <input v-model="form.avatar" class="inp" placeholder="หรือวาง URL รูป — เว้นว่างเพื่อใช้ตัวอักษร">
+              </div>
+            </div>
           </div>
+
+          <!-- ประเภท: เลือกได้หลายประเภท -->
+          <div class="sm:col-span-2">
+            <label class="lbl">ประเภท (Category) — เลือกได้หลายประเภท</label>
+            <div class="flex flex-wrap gap-2 mt-1">
+              <label v-for="c in allCategories" :key="c"
+                class="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl border cursor-pointer transition"
+                :class="form.categories.includes(c)?'border-brand-400 bg-brand-50 text-brand-700':'border-brand-50 text-ink-700'">
+                <input type="checkbox" :value="c" v-model="form.categories" class="accent-brand-500"> {{ c }}
+              </label>
+              <span v-if="!allCategories.length" class="text-xs text-ink-500">ยังไม่มีประเภท</span>
+            </div>
+            <div class="flex gap-2 mt-2">
+              <input v-model="newCat" @keydown.enter.prevent="addCategory" class="inp" placeholder="เพิ่มประเภทใหม่ แล้วกด Enter">
+              <button type="button" @click="addCategory" class="shrink-0 px-3 rounded-xl bg-brand-50 text-brand-700 text-sm font-500 hover:bg-brand-100 transition">+ เพิ่ม</button>
+            </div>
+          </div>
+
           <div><label class="lbl">ระดับ (Tier)</label><select v-model="form.tier" class="inp"><option v-for="t in tiers" :key="t">{{ t }}</option></select></div>
           <div><label class="lbl">แพลตฟอร์มหลัก</label><select v-model="form.mainPlatform" class="inp"><option v-for="p in platforms" :key="p">{{ p }}</option></select></div>
           <div><label class="lbl">เรทเริ่มต้น (บาท)</label><input v-model.number="form.startingRate" type="number" class="inp"></div>
@@ -851,7 +904,7 @@ tailwind.config = {
           <label class="lbl">เคยใช้ Influencer (เลือกได้หลายคน — เช็กไม่ให้ซ้ำ)</label>
           <div class="grid sm:grid-cols-2 gap-1.5 mt-1 max-h-40 overflow-y-auto rounded-xl border border-brand-50 p-2">
             <label v-for="inf in mainInfluencers" :key="inf.id" class="flex items-center gap-2 text-sm px-2 py-1 rounded-lg cursor-pointer hover:bg-brand-50">
-              <input type="checkbox" :value="inf.id" v-model="custForm.influencerHistory" class="accent-brand-500"> {{ inf.nickname }} <span class="text-[11px] text-ink-500">({{ inf.category }})</span>
+              <input type="checkbox" :value="inf.id" v-model="custForm.influencerHistory" class="accent-brand-500"> {{ inf.nickname }} <span class="text-[11px] text-ink-500">({{ infCats(inf).join(', ') || '—' }})</span>
             </label>
             <p v-if="!mainInfluencers.length" class="text-xs text-ink-500">ยังไม่มี Influencer ในคลังหลัก</p>
           </div>
@@ -974,6 +1027,7 @@ createApp({
       profile: null,
       form: null,
       custForm: null,
+      newCat: '',
       toast: '',
     };
   },
@@ -1001,10 +1055,15 @@ createApp({
       return Object.keys(map).map((name,idx)=>{ const count=map[name]; const pct=count/total*100;
         const seg={ name, count, color:colors[idx%colors.length], dash:`${pct} ${100-pct}`, offset:25-acc }; acc+=pct; return seg; });
     },
-    activeCategories(){ return this.categories.filter(c=>this.mainInfluencers.some(i=>i.category===c)); },
+    allCategories(){
+      const set=new Set(this.categories);
+      this.influencers.forEach(i=> this.infCats(i).forEach(c=> c && set.add(c)));
+      return [...set];
+    },
+    activeCategories(){ return this.allCategories.filter(c=>this.mainInfluencers.some(i=>this.infCats(i).includes(c))); },
     matrix(){
-      const m={}; this.categories.forEach(c=>{ m[c]={}; this.tiers.forEach(t=>m[c][t]=0); });
-      this.mainInfluencers.forEach(i=>{ if(m[i.category]&&m[i.category][i.tier]!==undefined) m[i.category][i.tier]++; });
+      const m={}; this.allCategories.forEach(c=>{ m[c]={}; this.tiers.forEach(t=>m[c][t]=0); });
+      this.mainInfluencers.forEach(i=>{ this.infCats(i).forEach(c=>{ if(m[c]&&m[c][i.tier]!==undefined) m[c][i.tier]++; }); });
       return m;
     },
     overduePool(){ return this.poolInfluencers.filter(i=>this.isOverdue(i)); },
@@ -1016,11 +1075,21 @@ createApp({
         || (i.contact.line||'').toLowerCase().includes(q) );
       if(this.fTier) a=a.filter(i=>i.tier===this.fTier);
       if(this.fPlatform) a=a.filter(i=>i.mainPlatform===this.fPlatform);
-      if(this.fCategory) a=a.filter(i=>i.category===this.fCategory);
+      if(this.fCategory) a=a.filter(i=>this.infCats(i).includes(this.fCategory));
       if(this.fRate){ const [lo,hi]=this.fRate.split('-').map(Number); a=a.filter(i=>i.startingRate>=lo && i.startingRate<=hi); }
       return a;
     },
     hasFilter(){ return this.fTier||this.fPlatform||this.fCategory||this.fRate; },
+    // จัดกลุ่มรายชื่อ (ตามตัวกรอง/ค้นหาปัจจุบัน) ตามประเภท — 1 คนที่มีหลายประเภทจะปรากฏในทุกกลุ่มที่เกี่ยวข้อง
+    groupedByCategory(){
+      const groups={};
+      this.filteredMain.forEach(inf=>{
+        const cats=this.infCats(inf);
+        const list = cats.length ? cats : ['ไม่ระบุประเภท'];
+        list.forEach(c=>{ (groups[c]=groups[c]||[]).push(inf); });
+      });
+      return Object.keys(groups).sort((a,b)=>a.localeCompare(b,'th')).map(name=>({ name, items:groups[name] }));
+    },
     filteredPool(){
       let a=this.poolInfluencers; const q=this.poolSearch.trim().toLowerCase();
       if(q) a=a.filter(i=>(i.nickname+i.fullName+(i.tag||'')).toLowerCase().includes(q));
@@ -1069,20 +1138,68 @@ createApp({
     avatarColor(name){ const colors=['#f9a8d4','#fbcfe8','#f0abfc','#c4b5fd','#a5b4fc','#fda4af','#fca5a5','#fdba74']; let h=0; for(const ch of (name||'?')) h=ch.charCodeAt(0)+((h<<5)-h); return colors[Math.abs(h)%colors.length]; },
     avatarHtml(inf, size, big){
       const px=size*4; const name=inf.nickname||inf.fullName||'?';
-      const initials=name.trim().slice(0,2);
+      const initials=(name.trim().slice(0,2))||'?';
       const ring = big ? 'box-shadow:0 0 0 4px #fff;' : '';
+      const bg = this.avatarColor(name);
+      const base = `width:${px}px;height:${px}px;${ring}`;
       if(inf.avatar){
-        return `<img src="${inf.avatar}" style="width:${px}px;height:${px}px;${ring}" class="rounded-2xl object-cover" onerror="this.style.display='none'">`;
+        // วางรูปทับตัวอักษรไว้ ถ้ารูปโหลดไม่ขึ้น (onerror) จะลบ <img> ออก แล้วตัวอักษรที่อยู่ข้างหลังจะแสดงแทนเอง
+        return `<div style="${base};background:${bg}" class="relative rounded-2xl flex items-center justify-center text-white font-700 overflow-hidden">`
+          + `<span>${initials}</span>`
+          + `<img src="${inf.avatar}" style="position:absolute;inset:0;width:100%;height:100%" class="object-cover" onerror="this.remove()">`
+          + `</div>`;
       }
-      return `<div style="width:${px}px;height:${px}px;background:${this.avatarColor(name)};${ring}" class="rounded-2xl flex items-center justify-center text-white font-700" >${initials}</div>`;
+      return `<div style="${base};background:${bg}" class="rounded-2xl flex items-center justify-center text-white font-700" >${initials}</div>`;
     },
 
     clearFilter(){ this.fTier=this.fPlatform=this.fCategory=this.fRate=''; },
 
+    // ----- หลายประเภท (Multi-category) -----
+    // คืนค่าเป็น array ของประเภทเสมอ รองรับทั้งข้อมูลเก่า (category เป็น string เดียว) และข้อมูลใหม่ (categories เป็น array)
+    infCats(inf){
+      if(inf && Array.isArray(inf.categories) && inf.categories.length) return inf.categories.filter(Boolean);
+      if(inf && inf.category) return [inf.category];
+      return [];
+    },
+    addCategory(){
+      const c=(this.newCat||'').trim();
+      if(!c) return;
+      if(!this.categories.includes(c)) this.categories.push(c);
+      if(this.form && !this.form.categories.includes(c)) this.form.categories.push(c);
+      this.newCat='';
+    },
+
+    // ----- อัปโหลด/ใส่รูปโปรไฟล์ -----
+    // อ่านไฟล์รูปจากเครื่อง ย่อขนาดด้วย canvas (กว้าง/สูงไม่เกิน 256px) แล้วเก็บเป็น base64 ใน form.avatar
+    // ทำให้บันทึกลง Supabase (JSON) ได้เลยโดยไม่ต้องมี storage แยก ถ้าไม่มีรูปก็ยังแสดงเป็นตัวอักษรเหมือนเดิม
+    onAvatarFile(e){
+      const file=e.target.files&&e.target.files[0]; if(!file) return;
+      if(!file.type.startsWith('image/')){ this.notify('กรุณาเลือกไฟล์รูปภาพ'); e.target.value=''; return; }
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const img=new Image();
+        img.onload=()=>{
+          const max=256; let {width:w,height:h}=img;
+          if(w>h){ if(w>max){ h=Math.round(h*max/w); w=max; } }
+          else { if(h>max){ w=Math.round(w*max/h); h=max; } }
+          const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+          canvas.getContext('2d').drawImage(img,0,0,w,h);
+          try{ this.form.avatar=canvas.toDataURL('image/jpeg',0.85); }
+          catch(err){ this.form.avatar=reader.result; }
+          this.notify('เพิ่มรูปแล้ว');
+        };
+        img.onerror=()=>{ this.notify('ไฟล์รูปไม่ถูกต้อง'); };
+        img.src=reader.result;
+      };
+      reader.readAsDataURL(file);
+      e.target.value='';
+    },
+    clearAvatar(){ if(this.form) this.form.avatar=''; },
+
     openProfile(inf){ this.profile=inf; this.form=null; },
 
     blankInfluencer(isPool){
-      return { id:null, isPool, fullName:'', nickname:'', avatar:'', category:'Lifestyle', tier:'Micro',
+      return { id:null, isPool, fullName:'', nickname:'', avatar:'', category:'Lifestyle', categories:['Lifestyle'], tier:'Micro',
         mainPlatform:'Instagram', startingRate:0, rating:5,
         contact:{line:'',email:'',tel:''}, address:'', driveLink:'', canTravel:false,
         platforms:[{name:'Instagram',url:'',followers:0,engagement:0,contentType:''}],
@@ -1093,12 +1210,19 @@ createApp({
     },
     openForm(inf,isPool){
       this.profile=null;
+      this.newCat='';
       this.form = inf ? JSON.parse(JSON.stringify(inf)) : this.blankInfluencer(isPool);
       if(inf) this.form.isPool = isPool;
+      // แปลงให้เป็น array ของประเภทเสมอ (รองรับข้อมูลเก่าที่มีแต่ category เดี่ยว)
+      this.form.categories = this.infCats(this.form);
+      if(!this.form.categories.length) this.form.categories = [];
     },
     saveForm(){
       if(!this.form.nickname.trim()){ this.notify('กรุณากรอกชื่อในวงการ/ชื่อเล่น'); return; }
       const f=this.form;
+      // ทำความสะอาดรายการประเภท แล้วซิงก์ field เดิม category (เก็บค่าตัวแรก) ไว้เพื่อความเข้ากันได้กับข้อมูลเดิม
+      f.categories = [...new Set((f.categories||[]).map(c=>(c||'').trim()).filter(Boolean))];
+      f.category = f.categories[0] || '';
       if(f.id){ const idx=this.influencers.findIndex(i=>i.id===f.id); if(idx>-1) this.influencers.splice(idx,1,f); }
       else { f.id='inf_'+Date.now(); this.influencers.push(f); }
       this.notify('บันทึกข้อมูลแล้ว');
