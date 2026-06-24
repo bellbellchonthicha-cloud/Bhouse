@@ -1135,7 +1135,16 @@ createApp({
     },
 
     async logout(){
-      await window._sb.auth.signOut();
+      try {
+        const { createClient } = supabase;
+        const sb = createClient('https://jxhxwssuzxjrkfnklqev.supabase.co', 'sb_publishable_Gzf3bbPX5BMdRU1BY3bVrA_qLi-q6Cq');
+        await sb.auth.signOut();
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('app').style.display = 'none';
+      } catch(e) {
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('app').style.display = 'none';
+      }
     },
 
     subscribeRealtime(){
