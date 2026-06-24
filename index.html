@@ -114,7 +114,7 @@ tailwind.config = {
         </button>
         <input ref="importFile" type="file" accept="application/json,.json" class="hidden" @change="handleImport">
         <p class="px-2 text-[10px] text-ink-500 leading-relaxed">บันทึกอัตโนมัติลงเครื่องนี้ • อย่าลืมสำรองก่อนล้างแคช</p>
-        <button @click="doLogout()" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-500 border border-brand-100 text-ink-700 hover:bg-brand-50 transition mt-1">
+        <button @click="logout" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-500 border border-brand-100 text-ink-700 hover:bg-brand-50 transition mt-1">
           <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 16l4-4m0 0l-4-4m4 4H7" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7v10a2 2 0 0 0 2 2h5" stroke-linecap="round"/></svg>
           ออกจากระบบ
         </button>
@@ -1132,6 +1132,10 @@ createApp({
           this.influencers=d.influencers||[]; this.customers=d.customers||[]; this.notify('นำเข้าข้อมูลสำเร็จ'); }
       }catch(err){ this.notify('ไฟล์ไม่ถูกต้อง'); } e.target.value=''; };
       reader.readAsText(file);
+    },
+
+    async logout(){
+      await window._sb.auth.signOut();
     },
 
     subscribeRealtime(){
