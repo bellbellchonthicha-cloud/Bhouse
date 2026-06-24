@@ -10,6 +10,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 tailwind.config = {
   theme: {
@@ -108,6 +109,10 @@ tailwind.config = {
           <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round"/></svg>
           สำรองข้อมูล (JSON)
         </button>
+        <button @click="exportExcel" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 8l8 8M16 8l-8 8" stroke-linecap="round"/></svg>
+          ส่งออก Excel
+        </button>
         <button @click="$refs.importFile.click()" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-500 border border-brand-100 text-ink-700 hover:bg-brand-50 transition">
           <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15V3m0 0L8 7m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round"/></svg>
           นำเข้าข้อมูล (JSON)
@@ -151,7 +156,7 @@ tailwind.config = {
               <span class="w-1.5 h-5 rounded-full bg-brand-500"></span>
               <h3 class="font-600 text-base">ส่วนที่ 1 · คลังรายชื่อหลัก (Influencer Directory)</h3>
             </div>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="grid grid-cols-2 gap-4">
               <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
                 <p class="text-xs text-ink-500 mb-1">Influencer ทั้งหมด</p>
                 <p class="text-3xl font-700 text-brand-600">{{ mainInfluencers.length }}</p>
@@ -161,16 +166,6 @@ tailwind.config = {
                 <p class="text-xs text-ink-500 mb-1">Active Campaigns</p>
                 <p class="text-3xl font-700 text-brand-600">{{ activeCampaigns }}</p>
                 <p class="text-[11px] text-ink-500 mt-1">งานที่กำลังดำเนินอยู่</p>
-              </div>
-              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
-                <p class="text-xs text-ink-500 mb-1">เรทเฉลี่ยเริ่มต้น</p>
-                <p class="text-3xl font-700 text-brand-600">฿{{ fmt(avgStartingRate) }}</p>
-                <p class="text-[11px] text-ink-500 mt-1">ต่อ 1 โพสต์</p>
-              </div>
-              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
-                <p class="text-xs text-ink-500 mb-1">คะแนนเฉลี่ย</p>
-                <p class="text-3xl font-700 text-brand-600">{{ avgRating }} <span class="text-base text-brand-300">★</span></p>
-                <p class="text-[11px] text-ink-500 mt-1">ความพึงพอใจทีม</p>
               </div>
             </div>
 
@@ -290,6 +285,39 @@ tailwind.config = {
                 </button>
               </div>
             </div>
+
+            <!-- รายชื่อใน Pool พร้อมประเภท / Tier / สถานะ -->
+            <div class="mt-4 bg-white rounded-2xl shadow-soft border border-brand-50 overflow-x-auto">
+              <table class="w-full text-sm min-w-[560px]">
+                <thead class="bg-brand-50/60">
+                  <tr class="text-left text-xs text-ink-500">
+                    <th class="py-3 px-4 font-500">Influencer</th>
+                    <th class="py-3 px-3 font-500">ประเภท</th>
+                    <th class="py-3 px-3 font-500">Tier</th>
+                    <th class="py-3 px-3 font-500">สถานะ Pool</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="inf in poolInfluencers" :key="inf.id" class="border-t border-brand-50 hover:bg-brand-50/40 transition cursor-pointer" @click="go('pool'); openProfile(inf)">
+                    <td class="py-2.5 px-4">
+                      <div class="flex items-center gap-3">
+                        <div v-html="avatarHtml(inf,8)"></div>
+                        <span class="font-600">{{ inf.nickname }}</span>
+                      </div>
+                    </td>
+                    <td class="py-2.5 px-3">
+                      <div class="flex flex-wrap gap-1">
+                        <span v-for="c in infCats(inf)" :key="c" class="text-[11px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">{{ c }}</span>
+                        <span v-if="!infCats(inf).length" class="text-[11px] text-ink-500">—</span>
+                      </div>
+                    </td>
+                    <td class="py-2.5 px-3"><span class="text-[11px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">{{ inf.tier }}</span></td>
+                    <td class="py-2.5 px-3"><span class="status-pill" :class="poolStatusClass(inf.poolStatus)">{{ inf.poolStatus }}</span></td>
+                  </tr>
+                  <tr v-if="!poolInfluencers.length"><td colspan="4" class="text-center text-ink-500 py-6 text-xs">Pool ว่างเปล่า</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
 
@@ -343,6 +371,7 @@ tailwind.config = {
               <thead class="bg-brand-50/60">
                 <tr class="text-left text-xs text-ink-500">
                   <th class="py-3 px-4 font-500">Influencer</th>
+                  <th class="py-3 px-3 font-500">Line ID</th>
                   <th class="py-3 px-3 font-500">ช่องทาง</th>
                   <th class="py-3 px-3 font-500">ผู้ติดตาม</th>
                   <th class="py-3 px-3 font-500">เรทเริ่มต้น</th>
@@ -362,6 +391,10 @@ tailwind.config = {
                       </div>
                     </div>
                   </td>
+                  <td class="py-3 px-3" @click.stop>
+                    <a v-if="inf.contact && inf.contact.line" :href="lineUrl(inf.contact.line)" target="_blank" class="text-xs text-brand-600 hover:underline">{{ inf.contact.line }}</a>
+                    <span v-else class="text-xs text-ink-500">—</span>
+                  </td>
                   <td class="py-3 px-3"><span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-brand-50 text-brand-700">{{ inf.mainPlatform }}</span></td>
                   <td class="py-3 px-3 font-500">{{ fmtFollowers(mainFollowers(inf)) }}</td>
                   <td class="py-3 px-3 font-600 text-brand-600">฿{{ fmt(inf.startingRate) }}</td>
@@ -372,7 +405,7 @@ tailwind.config = {
                     <button @click="remove(inf.id)" class="icon-btn">🗑️</button>
                   </td>
                 </tr>
-                <tr v-if="!filteredMain.length"><td colspan="7" class="text-center text-ink-500 py-10 text-sm">ไม่พบรายชื่อที่ตรงกับเงื่อนไข</td></tr>
+                <tr v-if="!filteredMain.length"><td colspan="8" class="text-center text-ink-500 py-10 text-sm">ไม่พบรายชื่อที่ตรงกับเงื่อนไข</td></tr>
               </tbody>
             </table>
           </div>
@@ -479,6 +512,7 @@ tailwind.config = {
                 <tr class="text-left text-xs text-ink-500">
                   <th class="py-3 px-4 font-500">Influencer</th>
                   <th class="py-3 px-3 font-500">Tag / ประเภท</th>
+                  <th class="py-3 px-3 font-500">Line ID</th>
                   <th class="py-3 px-3 font-500">ช่องทาง</th>
                   <th class="py-3 px-3 font-500">ผู้ติดตาม</th>
                   <th class="py-3 px-3 font-500">ติดต่อล่าสุด</th>
@@ -501,6 +535,10 @@ tailwind.config = {
                     </div>
                   </td>
                   <td class="py-3 px-3"><span class="text-[11px] px-2 py-1 rounded-lg bg-brand-100 text-brand-700">{{ inf.tag || infCats(inf).join(', ') || '—' }}</span></td>
+                  <td class="py-3 px-3" @click.stop>
+                    <a v-if="inf.contact && inf.contact.line" :href="lineUrl(inf.contact.line)" target="_blank" class="text-xs text-brand-600 hover:underline">{{ inf.contact.line }} ↗</a>
+                    <span v-else class="text-xs text-ink-500">—</span>
+                  </td>
                   <td class="py-3 px-3"><span class="text-xs px-2 py-1 rounded-lg bg-brand-50 text-brand-700">{{ inf.mainPlatform }}</span></td>
                   <td class="py-3 px-3 font-500">{{ fmtFollowers(mainFollowers(inf)) }}</td>
                   <td class="py-3 px-3 text-xs" :class="isOverdue(inf)?'text-brand-600 font-600':'text-ink-500'">
@@ -514,7 +552,7 @@ tailwind.config = {
                     <button @click="remove(inf.id)" class="icon-btn">🗑️</button>
                   </td>
                 </tr>
-                <tr v-if="!filteredPool.length"><td colspan="7" class="text-center text-ink-500 py-10 text-sm">Pool ว่างเปล่า — กด “เพิ่มเข้า Pool” เพื่อเริ่ม</td></tr>
+                <tr v-if="!filteredPool.length"><td colspan="8" class="text-center text-ink-500 py-10 text-sm">Pool ว่างเปล่า — กด “เพิ่มเข้า Pool” เพื่อเริ่ม</td></tr>
               </tbody>
             </table>
           </div>
@@ -668,7 +706,10 @@ tailwind.config = {
         <div class="mt-5">
           <p class="section-h">① ข้อมูลทั่วไป & การติดต่อ</p>
           <div class="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            <div class="info-row"><span>Line</span><b>{{ profile.contact.line || '—' }}</b></div>
+            <div class="info-row"><span>Line</span>
+              <a v-if="profile.contact.line" :href="lineUrl(profile.contact.line)" target="_blank" class="text-brand-600 hover:underline font-500">{{ profile.contact.line }} ↗</a>
+              <b v-else>—</b>
+            </div>
             <div class="info-row"><span>อีเมล</span><b>{{ profile.contact.email || '—' }}</b></div>
             <div class="info-row"><span>เบอร์โทร</span><b>{{ profile.contact.tel || '—' }}</b></div>
             <div class="info-row"><span>เดินทางนอกสถานที่</span><b :class="profile.canTravel?'text-emerald-600':'text-ink-500'">{{ profile.canTravel?'สะดวก':'ไม่สะดวก' }}</b></div>
@@ -680,20 +721,17 @@ tailwind.config = {
           </div>
         </div>
 
-        <!-- Section 2: Social Metrics -->
+        <!-- Section 2: Social -->
         <div class="mt-5">
-          <p class="section-h">② โซเชียลมีเดีย & ตัวเลข</p>
+          <p class="section-h">② โซเชียลมีเดีย</p>
           <div class="grid sm:grid-cols-2 gap-3">
             <a v-for="(p,i) in profile.platforms" :key="i" :href="p.url||'#'" :target="p.url?'_blank':'_self'"
               class="block rounded-xl border border-brand-50 p-3 hover:border-brand-300 hover:bg-brand-50/40 transition">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-600 flex items-center gap-1.5">{{ p.name }} <span v-if="p.url" class="text-brand-400 text-xs">↗</span></span>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">ER {{ p.engagement }}%</span>
+                <span class="text-lg font-700 text-brand-600">{{ fmtFollowers(p.followers) }}</span>
               </div>
-              <div class="flex items-end justify-between mt-1">
-                <p class="text-lg font-700 text-brand-600">{{ fmtFollowers(p.followers) }}</p>
-                <p class="text-[11px] text-ink-500">{{ p.contentType }}</p>
-              </div>
+              <p v-if="p.account" class="text-[11px] text-ink-500 mt-1">{{ p.account }}</p>
             </a>
             <p v-if="!profile.platforms.length" class="text-xs text-ink-500">ยังไม่มีช่องทาง</p>
           </div>
@@ -704,14 +742,15 @@ tailwind.config = {
           <p class="section-h">③ Rate Card & บริการ</p>
           <div class="rounded-xl border border-brand-50 overflow-hidden">
             <table class="w-full text-sm">
-              <thead class="bg-brand-50/60 text-xs text-ink-500"><tr><th class="text-left py-2 px-3 font-500">บริการ</th><th class="text-right py-2 px-3 font-500">ราคา</th><th class="text-left py-2 px-3 font-500">เงื่อนไข</th></tr></thead>
+              <thead class="bg-brand-50/60 text-xs text-ink-500"><tr><th class="text-left py-2 px-3 font-500">บริการ</th><th class="text-right py-2 px-3 font-500">ราคา</th><th class="text-right py-2 px-3 font-500">Video</th><th class="text-left py-2 px-3 font-500">เงื่อนไข</th></tr></thead>
               <tbody>
                 <tr v-for="(r,i) in profile.rateCard" :key="i" class="border-t border-brand-50">
                   <td class="py-2 px-3 font-500">{{ r.service }}</td>
                   <td class="py-2 px-3 text-right font-600 text-brand-600">฿{{ fmt(r.price) }}</td>
+                  <td class="py-2 px-3 text-right font-600 text-brand-600">{{ r.video ? '฿'+fmt(r.video) : '—' }}</td>
                   <td class="py-2 px-3 text-xs text-ink-500">{{ r.condition || '—' }}</td>
                 </tr>
-                <tr v-if="!profile.rateCard.length"><td colspan="3" class="text-center text-ink-500 py-3 text-xs">ยังไม่มี Rate Card</td></tr>
+                <tr v-if="!profile.rateCard.length"><td colspan="4" class="text-center text-ink-500 py-3 text-xs">ยังไม่มี Rate Card</td></tr>
               </tbody>
             </table>
           </div>
@@ -818,15 +857,14 @@ tailwind.config = {
 
         <!-- platforms -->
         <div>
-          <div class="flex items-center justify-between mb-2"><p class="section-h !mb-0">ช่องทางโซเชียล & ตัวเลข</p>
-            <button @click="form.platforms.push({name:'Instagram',url:'',followers:0,engagement:0,contentType:''})" class="text-xs text-brand-600 font-500">+ เพิ่มช่องทาง</button>
+          <div class="flex items-center justify-between mb-2"><p class="section-h !mb-0">ช่องทางโซเชียล</p>
+            <button @click="form.platforms.push({name:'Instagram',url:'',account:'',followers:0,engagement:0,contentType:''})" class="text-xs text-brand-600 font-500">+ เพิ่มช่องทาง</button>
           </div>
           <div v-for="(p,i) in form.platforms" :key="i" class="grid grid-cols-12 gap-2 mb-2 items-center">
             <select v-model="p.name" class="inp col-span-3 !py-2"><option v-for="pl in platforms" :key="pl">{{ pl }}</option></select>
-            <input v-model="p.url" placeholder="URL" class="inp col-span-3 !py-2">
-            <input v-model.number="p.followers" type="number" placeholder="Followers" class="inp col-span-2 !py-2">
-            <input v-model.number="p.engagement" type="number" step="0.1" placeholder="ER%" class="inp col-span-2 !py-2">
-            <input v-model="p.contentType" placeholder="คอนเทนต์" class="inp col-span-1 !py-2 !px-2">
+            <input v-model="p.url" placeholder="ลิงก์ (URL)" class="inp col-span-4 !py-2">
+            <input v-model="p.account" placeholder="ชื่อ account" class="inp col-span-2 !py-2">
+            <input v-model.number="p.followers" type="number" placeholder="ผู้ติดตาม" class="inp col-span-2 !py-2">
             <button @click="form.platforms.splice(i,1)" class="col-span-1 text-brand-400 hover:text-brand-600">✕</button>
           </div>
           <p v-if="!form.platforms.length" class="text-xs text-ink-500">ยังไม่มีช่องทาง</p>
@@ -835,11 +873,12 @@ tailwind.config = {
         <!-- rate card -->
         <div>
           <div class="flex items-center justify-between mb-2"><p class="section-h !mb-0">Rate Card</p>
-            <button @click="form.rateCard.push({service:'',price:0,condition:''})" class="text-xs text-brand-600 font-500">+ เพิ่มบริการ</button>
+            <button @click="form.rateCard.push({service:'',price:0,video:0,condition:''})" class="text-xs text-brand-600 font-500">+ เพิ่มบริการ</button>
           </div>
           <div v-for="(r,i) in form.rateCard" :key="i" class="grid grid-cols-12 gap-2 mb-2">
-            <input v-model="r.service" placeholder="บริการ เช่น ภาพนิ่ง 1 โพสต์" class="inp col-span-5 !py-2">
-            <input v-model.number="r.price" type="number" placeholder="ราคา" class="inp col-span-3 !py-2">
+            <input v-model="r.service" placeholder="บริการ เช่น ภาพนิ่ง 1 โพสต์" class="inp col-span-4 !py-2">
+            <input v-model.number="r.price" type="number" placeholder="ราคา" class="inp col-span-2 !py-2">
+            <input v-model.number="r.video" type="number" placeholder="Video" class="inp col-span-2 !py-2">
             <input v-model="r.condition" placeholder="เงื่อนไข" class="inp col-span-3 !py-2">
             <button @click="form.rateCard.splice(i,1)" class="col-span-1 text-brand-400 hover:text-brand-600">✕</button>
           </div>
@@ -850,7 +889,7 @@ tailwind.config = {
         <div>
           <p class="section-h">สถานะ</p>
           <div class="grid sm:grid-cols-2 gap-3">
-            <div v-if="!form.isPool"><label class="lbl">Profile Status</label><select v-model="form.profileStatus" class="inp"><option>Active</option><option>In-Conversation</option></select></div>
+            <div v-if="!form.isPool"><label class="lbl">Profile Status</label><select v-model="form.profileStatus" class="inp"><option>Active</option><option>In-Conversation</option><option>Potential</option></select></div>
             <div v-if="!form.isPool"><label class="lbl">Campaign Workflow</label><select v-model="form.campaignStatus" class="inp"><option v-for="s in campaignStatuses" :key="s">{{ s }}</option></select></div>
             <div v-if="form.isPool"><label class="lbl">Pool Status</label><select v-model="form.poolStatus" class="inp"><option v-for="s in poolStatuses" :key="s">{{ s }}</option></select></div>
             <div v-if="form.isPool"><label class="lbl">วันที่ติดต่อล่าสุด</label><input v-model="form.lastContactDate" type="date" class="inp"></div>
@@ -1013,7 +1052,7 @@ createApp({
       platforms: ['Instagram','TikTok','YouTube','Facebook','Twitter/X','Lemon8'],
       categories: ['Beauty','Food','Lifestyle','Fashion','Tech','Travel','Gaming','Health'],
       campaignStatuses: ['Proposed','Contacted','Contract Signed','Product Sent','Draft Reviewing','Published','Paid & Completed','Blacklisted'],
-      poolStatuses: ['ติดต่อแล้ว','รอการตอบกลับ','อ่านไม่ตอบ','ติดต่ออีกครั้ง'],
+      poolStatuses: ['ยังไม่ติดต่อ','ติดต่อแล้ว','รอการตอบกลับ','อ่านไม่ตอบ','ติดต่ออีกครั้ง','หา contact เพิ่มเติม'],
       pipelineStatuses: ['New Customer','Lead','In-Conversation','Active Client'],
       influencers: [],
       customers: [],
@@ -1060,7 +1099,11 @@ createApp({
       this.influencers.forEach(i=> this.infCats(i).forEach(c=> c && set.add(c)));
       return [...set];
     },
-    activeCategories(){ return this.allCategories.filter(c=>this.mainInfluencers.some(i=>this.infCats(i).includes(c))); },
+    activeCategories(){
+      const set=new Set();
+      this.mainInfluencers.forEach(i=>this.infCats(i).forEach(c=>c&&set.add(c)));
+      return [...set].sort((a,b)=>a.localeCompare(b,'th'));
+    },
     matrix(){
       const m={}; this.allCategories.forEach(c=>{ m[c]={}; this.tiers.forEach(t=>m[c][t]=0); });
       this.mainInfluencers.forEach(i=>{ this.infCats(i).forEach(c=>{ if(m[c]&&m[c][i.tier]!==undefined) m[c][i.tier]++; }); });
@@ -1129,10 +1172,17 @@ createApp({
     isOverdue(inf){ return inf.isPool && this.daysSince(inf.lastContactDate)>7 && ['รอการตอบกลับ','อ่านไม่ตอบ'].includes(inf.poolStatus); },
     poolCount(s){ return this.poolInfluencers.filter(i=>i.poolStatus===s).length; },
     infName(id){ const i=this.influencers.find(x=>x.id===id); return i?i.nickname:'—'; },
+    // สร้างลิงก์ Line ที่กดได้ — ถ้าเป็น URL อยู่แล้วใช้ตามนั้น ถ้าเป็น ID ให้แปลงเป็นลิงก์ add เพื่อน
+    lineUrl(line){
+      if(!line) return '';
+      const v=String(line).trim();
+      if(/^https?:\/\//i.test(v)) return v;
+      return 'https://line.me/ti/p/~' + v.replace(/^@/,'');
+    },
     infCustomerName(id){ const c=this.customers.find(x=>x.id===id); return c?c.companyName:'—'; },
 
-    profileStatusClass(s){ return s==='Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'; },
-    poolStatusClass(s){ return { 'ติดต่อแล้ว':'bg-emerald-100 text-emerald-700','รอการตอบกลับ':'bg-amber-100 text-amber-700','อ่านไม่ตอบ':'bg-orange-100 text-orange-700','ติดต่ออีกครั้ง':'bg-sky-100 text-sky-700' }[s]||'bg-brand-50 text-brand-700'; },
+    profileStatusClass(s){ return { 'Active':'bg-emerald-100 text-emerald-700','In-Conversation':'bg-amber-100 text-amber-700','Potential':'bg-sky-100 text-sky-700' }[s]||'bg-amber-100 text-amber-700'; },
+    poolStatusClass(s){ return { 'ยังไม่ติดต่อ':'bg-slate-100 text-slate-600','ติดต่อแล้ว':'bg-emerald-100 text-emerald-700','รอการตอบกลับ':'bg-amber-100 text-amber-700','อ่านไม่ตอบ':'bg-orange-100 text-orange-700','ติดต่ออีกครั้ง':'bg-sky-100 text-sky-700','หา contact เพิ่มเติม':'bg-violet-100 text-violet-700' }[s]||'bg-brand-50 text-brand-700'; },
     pipelineClass(s){ return { 'New Customer':'bg-sky-100 text-sky-700','Lead':'bg-amber-100 text-amber-700','In-Conversation':'bg-violet-100 text-violet-700','Active Client':'bg-emerald-100 text-emerald-700' }[s]||'bg-brand-50 text-brand-700'; },
 
     avatarColor(name){ const colors=['#f9a8d4','#fbcfe8','#f0abfc','#c4b5fd','#a5b4fc','#fda4af','#fca5a5','#fdba74']; let h=0; for(const ch of (name||'?')) h=ch.charCodeAt(0)+((h<<5)-h); return colors[Math.abs(h)%colors.length]; },
@@ -1202,11 +1252,11 @@ createApp({
       return { id:null, isPool, fullName:'', nickname:'', avatar:'', category:'Lifestyle', categories:['Lifestyle'], tier:'Micro',
         mainPlatform:'Instagram', startingRate:0, rating:5,
         contact:{line:'',email:'',tel:''}, address:'', driveLink:'', canTravel:false,
-        platforms:[{name:'Instagram',url:'',followers:0,engagement:0,contentType:''}],
-        rateCard:[{service:'ภาพนิ่ง 1 โพสต์',price:0,condition:''}],
+        platforms:[{name:'Instagram',url:'',account:'',followers:0,engagement:0,contentType:''}],
+        rateCard:[{service:'ภาพนิ่ง 1 โพสต์',price:0,video:0,condition:''}],
         history:[], teamNote:'',
         profileStatus:'Active', campaignStatus:'Proposed',
-        poolStatus:'ติดต่อแล้ว', lastContactDate:daysAgo(0), tag:'' };
+        poolStatus:'ยังไม่ติดต่อ', lastContactDate:daysAgo(0), tag:'' };
     },
     openForm(inf,isPool){
       this.profile=null;
@@ -1306,6 +1356,60 @@ createApp({
       const url=URL.createObjectURL(blob); const a=document.createElement('a');
       a.href=url; a.download='bellhouse-backup-'+new Date().toISOString().slice(0,10)+'.json';
       a.click(); URL.revokeObjectURL(url); this.notify('ดาวน์โหลดไฟล์สำรองแล้ว');
+    },
+
+    // ส่งออกข้อมูลทั้งหมดเป็นไฟล์ Excel (.xlsx) หลายชีต: คลังหลัก / Pool / ช่องทางโซเชียล / Rate Card / ลูกค้า
+    exportExcel(){
+      if(typeof XLSX==='undefined'){ this.notify('ยังโหลดตัวช่วย Excel ไม่เสร็จ ลองอีกครั้ง'); return; }
+      const yn=v=>v?'ใช่':'ไม่';
+      const wb=XLSX.utils.book_new();
+
+      const mainRows=this.mainInfluencers.map(i=>({
+        'ชื่อในวงการ':i.nickname||'', 'ชื่อจริง':i.fullName||'',
+        'ประเภท':this.infCats(i).join(', '), 'Tier':i.tier||'',
+        'แพลตฟอร์มหลัก':i.mainPlatform||'', 'ผู้ติดตามหลัก':this.mainFollowers(i)||0,
+        'เรทเริ่มต้น':i.startingRate||0, 'คะแนน':i.rating||0,
+        'สถานะ':i.profileStatus||'', 'Workflow':i.campaignStatus||'',
+        'Line':i.contact&&i.contact.line||'', 'อีเมล':i.contact&&i.contact.email||'', 'เบอร์โทร':i.contact&&i.contact.tel||'',
+        'เดินทางนอกสถานที่':yn(i.canTravel), 'ที่อยู่':i.address||'', 'Google Drive':i.driveLink||'', 'โน้ตทีม':i.teamNote||''
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(mainRows.length?mainRows:[{}]), 'คลังหลัก');
+
+      const poolRows=this.poolInfluencers.map(i=>({
+        'ชื่อในวงการ':i.nickname||'', 'ชื่อจริง':i.fullName||'',
+        'ประเภท':this.infCats(i).join(', '), 'Tier':i.tier||'', 'Tag':i.tag||'',
+        'แพลตฟอร์มหลัก':i.mainPlatform||'', 'ผู้ติดตามหลัก':this.mainFollowers(i)||0,
+        'สถานะ Pool':i.poolStatus||'', 'ติดต่อล่าสุด':i.lastContactDate||'',
+        'Line':i.contact&&i.contact.line||'', 'อีเมล':i.contact&&i.contact.email||'', 'เบอร์โทร':i.contact&&i.contact.tel||'', 'โน้ตทีม':i.teamNote||''
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(poolRows.length?poolRows:[{}]), 'Pool');
+
+      const socialRows=[];
+      this.influencers.forEach(i=> (i.platforms||[]).forEach(p=> socialRows.push({
+        'ชื่อในวงการ':i.nickname||'', 'กลุ่ม':i.isPool?'Pool':'คลังหลัก',
+        'ช่องทาง':p.name||'', 'ลิงก์':p.url||'', 'ชื่อ account':p.account||'', 'ผู้ติดตาม':p.followers||0
+      })));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(socialRows.length?socialRows:[{}]), 'ช่องทางโซเชียล');
+
+      const rateRows=[];
+      this.influencers.forEach(i=> (i.rateCard||[]).forEach(r=> rateRows.push({
+        'ชื่อในวงการ':i.nickname||'', 'กลุ่ม':i.isPool?'Pool':'คลังหลัก',
+        'บริการ':r.service||'', 'ราคา':r.price||0, 'Video':r.video||0, 'เงื่อนไข':r.condition||''
+      })));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rateRows.length?rateRows:[{}]), 'Rate Card');
+
+      const custRows=this.customers.map(c=>({
+        'บริษัท/ลูกค้า':c.companyName||'', 'ประเภทรายชื่อ':c.type==='Customer'?'ลูกค้า':'Lead',
+        'ประเภทธุรกิจ':c.businessType||'', 'ผู้ติดต่อ':c.contactPerson||'', 'เบอร์โทร':c.tel||'', 'อีเมล':c.email||'',
+        'Lead Source':c.leadSource||'', 'บริการที่สนใจ':(c.servicesInterested||[]).join(', '),
+        'เคยใช้ Influencer':(c.influencerHistory||[]).map(id=>this.infName(id)).join(', '),
+        'มี Asset':yn(c.hasAsset), 'มี Gen Code':yn(c.hasGenCode),
+        'จ้างไปแล้ว':c.totalBudgetSpent||0, 'คงเหลือ':c.remainingBalance||0, 'สถานะ Pipeline':c.pipelineStatus||''
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(custRows.length?custRows:[{}]), 'ลูกค้า (CRM)');
+
+      XLSX.writeFile(wb, 'bellhouse-export-'+new Date().toISOString().slice(0,10)+'.xlsx');
+      this.notify('ส่งออก Excel แล้ว');
     },
     handleImport(e){
       const file=e.target.files[0]; if(!file) return;
