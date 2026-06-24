@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>bell house — ระบบบริหารจัดการอินฟลูเอนเซอร์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Prompt', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+      colors: {
+        brand: {
+          50:'#fff5f9', 100:'#ffe6f1', 200:'#ffcfe3', 300:'#ffa9cd',
+          400:'#ff79ad', 500:'#f64f8f', 600:'#e23172', 700:'#bd225b',
+          800:'#9c1f4d', 900:'#821e44'
+        },
+        ink: { 500:'#8b8591', 700:'#4a4651', 900:'#2d2a32' }
+      },
+      boxShadow: {
+        soft: '0 1px 2px rgba(45,42,50,.04), 0 8px 24px rgba(246,79,143,.06)',
+        card: '0 1px 3px rgba(45,42,50,.05), 0 12px 32px rgba(246,79,143,.07)'
+      }
+    }
+  }
+}
+</script>
+<style>
+  html,body{ background:#fdf6fa; }
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb{ background:#ffcfe3; border-radius:99px; border:2px solid #fdf6fa; }
+  ::-webkit-scrollbar-thumb:hover{ background:#ffa9cd; }
+  [v-cloak]{ display:none; }
+  .fade-enter-active,.fade-leave-active{ transition:opacity .18s ease; }
+  .fade-enter-from,.fade-leave-to{ opacity:0; }
+  @keyframes pop{ from{ transform:scale(.96) translateY(8px); opacity:0 } to{ transform:scale(1) translateY(0); opacity:1 } }
+  .pop{ animation:pop .22s cubic-bezier(.2,.8,.2,1); }
+  @keyframes ring{ 0%,100%{ transform:rotate(0) } 20%{ transform:rotate(-12deg) } 40%{ transform:rotate(10deg) } 60%{ transform:rotate(-6deg) } 80%{ transform:rotate(4deg) } }
+  .bell-ring{ animation:ring 1.6s ease-in-out infinite; transform-origin:top center; display:inline-block; }
+</style>
+</head>
+<body class="font-sans text-ink-900 antialiased">
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="login-screen" class="fixed inset-0 z-[100] flex items-center justify-center" style="background:#fdf6fa; display:none;">
+  <div class="bg-white rounded-3xl p-8 w-full max-w-sm mx-4" style="box-shadow:0 1px 3px rgba(45,42,50,.05),0 12px 32px rgba(246,79,143,.07)">
+    <div class="flex flex-col items-center mb-6">
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-3" style="background:linear-gradient(135deg,#ff79ad,#e23172)">
+        <svg viewBox="0 0 24 24" fill="none" class="w-7 h-7"><path d="M12 3a5 5 0 0 0-5 5c0 3.5-1 5-2 6.2-.5.6-.1 1.8.8 1.8h12.4c.9 0 1.3-1.2.8-1.8C18 13 17 11.5 17 8a5 5 0 0 0-5-5Z" fill="currentColor"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+      <h1 style="font-weight:700;font-size:1.25rem;">bell house</h1>
+      <p style="font-size:.75rem;color:#8b8591;margin-top:.25rem;">Influencer Management</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.75rem;">
+      <div>
+        <label class="lbl">อีเมล</label>
+        <input id="login-email" type="email" class="inp" placeholder="email@example.com" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div>
+        <label class="lbl">รหัสผ่าน</label>
+        <input id="login-password" type="password" class="inp" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <p id="login-error" style="font-size:.75rem;color:#ef4444;display:none;"></p>
+      <button id="login-btn" onclick="doLogin()" class="inp" style="background:#f64f8f;color:#fff;font-weight:600;cursor:pointer;border:none;padding:.75rem;margin-top:.25rem;">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" v-cloak>
+
+  <div class="flex min-h-screen">
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="w-64 shrink-0 bg-white border-r border-brand-100 flex flex-col fixed h-screen z-30 transition-transform"
+           :class="mobileNav ? 'translate-x-0' : '-translate-x-full md:translate-x-0'">
+      <div class="px-5 pt-6 pb-5 border-b border-brand-50">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white shadow-soft">
+            <svg viewBox="0 0 24 24" fill="none" class="w-5 h-5"><path d="M12 3a5 5 0 0 0-5 5c0 3.5-1 5-2 6.2-.5.6-.1 1.8.8 1.8h12.4c.9 0 1.3-1.2.8-1.8C18 13 17 11.5 17 8a5 5 0 0 0-5-5Z" fill="currentColor"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <h1 class="font-700 text-lg leading-none tracking-tight">bell house</h1>
+            <p class="text-[11px] text-ink-500 mt-1">Influencer Management</p>
+          </div>
+        </div>
+      </div>
+
+      <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <button v-for="m in menus" :key="m.id" @click="go(m.id)"
+          class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-500 transition group"
+          :class="active===m.id ? 'bg-brand-500 text-white shadow-soft' : 'text-ink-700 hover:bg-brand-50'">
+          <span v-html="m.icon" class="w-5 h-5 shrink-0" :class="active===m.id?'text-white':'text-brand-400'"></span>
+          <span class="flex-1 text-left">{{ m.label }}</span>
+          <span v-if="m.id==='pool' && overduePool.length"
+            class="text-[10px] font-700 px-1.5 py-0.5 rounded-full"
+            :class="active===m.id?'bg-white/25 text-white':'bg-brand-500 text-white'">{{ overduePool.length }}</span>
+        </button>
+      </nav>
+
+      <div class="px-3 py-4 border-t border-brand-50 space-y-2">
+        <p class="px-2 text-[11px] font-600 text-ink-500 uppercase tracking-wide">ความปลอดภัยข้อมูล</p>
+        <button @click="backup" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-500 bg-brand-50 text-brand-700 hover:bg-brand-100 transition">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round"/></svg>
+          สำรองข้อมูล (JSON)
+        </button>
+        <button @click="$refs.importFile.click()" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-500 border border-brand-100 text-ink-700 hover:bg-brand-50 transition">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15V3m0 0L8 7m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round"/></svg>
+          นำเข้าข้อมูล (JSON)
+        </button>
+        <input ref="importFile" type="file" accept="application/json,.json" class="hidden" @change="handleImport">
+        <p class="px-2 text-[10px] text-ink-500 leading-relaxed">บันทึกอัตโนมัติลงเครื่องนี้ • อย่าลืมสำรองก่อนล้างแคช</p>
+        <button @click="doLogout()" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-500 border border-brand-100 text-ink-700 hover:bg-brand-50 transition mt-1">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 16l4-4m0 0l-4-4m4 4H7" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7v10a2 2 0 0 0 2 2h5" stroke-linecap="round"/></svg>
+          ออกจากระบบ
+        </button>
+      </div>
+    </aside>
+
+    <!-- backdrop mobile -->
+    <div v-if="mobileNav" @click="mobileNav=false" class="fixed inset-0 bg-ink-900/20 z-20 md:hidden"></div>
+
+    <!-- ============ MAIN ============ -->
+    <main class="flex-1 md:ml-64 min-w-0">
+      <!-- topbar -->
+      <header class="sticky top-0 z-10 bg-fdf6fa/80 backdrop-blur border-b border-brand-100 px-5 md:px-8 py-3.5 flex items-center gap-3" style="background:rgba(253,246,250,.85)">
+        <button @click="mobileNav=true" class="md:hidden p-2 rounded-lg hover:bg-brand-50">
+          <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round"/></svg>
+        </button>
+        <div>
+          <h2 class="font-600 text-base md:text-lg leading-tight">{{ menus.find(m=>m.id===active).label }}</h2>
+          <p class="text-[11px] text-ink-500 hidden sm:block">{{ subtitle }}</p>
+        </div>
+        <div class="ml-auto flex items-center gap-2 text-[11px] text-ink-500">
+          <span class="hidden sm:inline w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span class="hidden sm:inline">บันทึกอัตโนมัติ</span>
+        </div>
+      </header>
+
+      <div class="px-5 md:px-8 py-6 max-w-[1400px] mx-auto">
+
+        <!-- ===================== DASHBOARD ===================== -->
+        <section v-if="active==='dashboard'" class="space-y-8">
+          <!-- PART 1: Directory -->
+          <div>
+            <div class="flex items-center gap-2 mb-4">
+              <span class="w-1.5 h-5 rounded-full bg-brand-500"></span>
+              <h3 class="font-600 text-base">ส่วนที่ 1 · คลังรายชื่อหลัก (Influencer Directory)</h3>
+            </div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+                <p class="text-xs text-ink-500 mb-1">Influencer ทั้งหมด</p>
+                <p class="text-3xl font-700 text-brand-600">{{ mainInfluencers.length }}</p>
+                <p class="text-[11px] text-ink-500 mt-1">คนในคลังหลัก</p>
+              </div>
+              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+                <p class="text-xs text-ink-500 mb-1">Active Campaigns</p>
+                <p class="text-3xl font-700 text-brand-600">{{ activeCampaigns }}</p>
+                <p class="text-[11px] text-ink-500 mt-1">งานที่กำลังดำเนินอยู่</p>
+              </div>
+              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+                <p class="text-xs text-ink-500 mb-1">เรทเฉลี่ยเริ่มต้น</p>
+                <p class="text-3xl font-700 text-brand-600">฿{{ fmt(avgStartingRate) }}</p>
+                <p class="text-[11px] text-ink-500 mt-1">ต่อ 1 โพสต์</p>
+              </div>
+              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+                <p class="text-xs text-ink-500 mb-1">คะแนนเฉลี่ย</p>
+                <p class="text-3xl font-700 text-brand-600">{{ avgRating }} <span class="text-base text-brand-300">★</span></p>
+                <p class="text-[11px] text-ink-500 mt-1">ความพึงพอใจทีม</p>
+              </div>
+            </div>
+
+            <!-- engagement per platform -->
+            <div class="grid lg:grid-cols-3 gap-4 mt-4">
+              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50 lg:col-span-1">
+                <p class="text-sm font-600 mb-3">Engagement เฉลี่ยรายแพลตฟอร์ม</p>
+                <div class="space-y-3">
+                  <div v-for="p in engagementByPlatform" :key="p.name">
+                    <div class="flex justify-between text-xs mb-1">
+                      <span class="font-500">{{ p.name }}</span>
+                      <span class="text-brand-600 font-600">{{ p.avg }}%</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-brand-50 overflow-hidden">
+                      <div class="h-full rounded-full bg-gradient-to-r from-brand-300 to-brand-500" :style="{width: Math.min(p.avg*8,100)+'%'}"></div>
+                    </div>
+                  </div>
+                  <p v-if="!engagementByPlatform.length" class="text-xs text-ink-500">ยังไม่มีข้อมูล</p>
+                </div>
+              </div>
+
+              <!-- platform distribution donut -->
+              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50 lg:col-span-1">
+                <p class="text-sm font-600 mb-3">สัดส่วนแพลตฟอร์มหลัก</p>
+                <div class="flex items-center gap-5">
+                  <div class="relative w-32 h-32 shrink-0">
+                    <svg viewBox="0 0 36 36" class="w-32 h-32 -rotate-90">
+                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#ffe6f1" stroke-width="4"></circle>
+                      <circle v-for="(seg,i) in platformDonut" :key="i" cx="18" cy="18" r="15.9155" fill="none"
+                        :stroke="seg.color" stroke-width="4"
+                        :stroke-dasharray="seg.dash" :stroke-dashoffset="seg.offset"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                      <span class="text-xl font-700 text-brand-600">{{ mainInfluencers.length }}</span>
+                      <span class="text-[10px] text-ink-500">คน</span>
+                    </div>
+                  </div>
+                  <div class="space-y-1.5 text-xs">
+                    <div v-for="seg in platformDonut" :key="seg.name" class="flex items-center gap-2">
+                      <span class="w-2.5 h-2.5 rounded-sm" :style="{background:seg.color}"></span>
+                      <span class="flex-1">{{ seg.name }}</span>
+                      <span class="font-600 text-ink-700">{{ seg.count }}</span>
+                    </div>
+                    <p v-if="!platformDonut.length" class="text-ink-500">ยังไม่มีข้อมูล</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- tier breakdown -->
+              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50 lg:col-span-1">
+                <p class="text-sm font-600 mb-3">จำนวนตามระดับ (Tier)</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <div v-for="t in tiers" :key="t" class="rounded-xl bg-brand-50 p-3">
+                    <p class="text-[11px] text-ink-500">{{ t }}</p>
+                    <p class="text-2xl font-700 text-brand-600">{{ mainInfluencers.filter(i=>i.tier===t).length }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- matrix table -->
+            <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50 mt-4 overflow-x-auto">
+              <p class="text-sm font-600 mb-3">ตารางเปรียบเทียบ ประเภท × ระดับ (Matrix)</p>
+              <table class="w-full text-sm border-separate border-spacing-0 min-w-[520px]">
+                <thead>
+                  <tr>
+                    <th class="text-left text-xs text-ink-500 font-500 py-2 px-3">ประเภท \ ระดับ</th>
+                    <th v-for="t in tiers" :key="t" class="text-center text-xs font-600 py-2 px-3 text-brand-700">{{ t }}</th>
+                    <th class="text-center text-xs font-600 py-2 px-3 text-ink-700">รวม</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="cat in activeCategories" :key="cat" class="hover:bg-brand-50/50">
+                    <td class="py-2 px-3 font-500 border-t border-brand-50">{{ cat }}</td>
+                    <td v-for="t in tiers" :key="t" class="text-center py-2 px-3 border-t border-brand-50">
+                      <span v-if="matrix[cat][t]" class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-brand-100 text-brand-700 font-600 text-xs">{{ matrix[cat][t] }}</span>
+                      <span v-else class="text-brand-200">–</span>
+                    </td>
+                    <td class="text-center py-2 px-3 font-700 text-brand-600 border-t border-brand-50">{{ tiers.reduce((s,t)=>s+matrix[cat][t],0) }}</td>
+                  </tr>
+                  <tr v-if="!activeCategories.length"><td colspan="6" class="text-center text-ink-500 py-4 text-xs">ยังไม่มีข้อมูล</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- PART 2: Prospect Pool -->
+          <div>
+            <div class="flex items-center gap-2 mb-4">
+              <span class="w-1.5 h-5 rounded-full bg-brand-300"></span>
+              <h3 class="font-600 text-base">ส่วนที่ 2 · Pool รายชื่อภายนอก (Prospect Pool)</h3>
+            </div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+                <p class="text-xs text-ink-500 mb-1">ใน Pool ทั้งหมด</p>
+                <p class="text-3xl font-700 text-brand-600">{{ poolInfluencers.length }}</p>
+              </div>
+              <div class="bg-amber-50 rounded-2xl p-5 shadow-soft border border-amber-100">
+                <p class="text-xs text-amber-700 mb-1">รอการตอบกลับ</p>
+                <p class="text-3xl font-700 text-amber-600">{{ poolCount('รอการตอบกลับ') }}</p>
+              </div>
+              <div class="bg-orange-50 rounded-2xl p-5 shadow-soft border border-orange-100">
+                <p class="text-xs text-orange-700 mb-1">อ่านไม่ตอบ</p>
+                <p class="text-3xl font-700 text-orange-600">{{ poolCount('อ่านไม่ตอบ') }}</p>
+              </div>
+              <div class="bg-sky-50 rounded-2xl p-5 shadow-soft border border-sky-100">
+                <p class="text-xs text-sky-700 mb-1">ติดต่ออีกครั้ง</p>
+                <p class="text-3xl font-700 text-sky-600">{{ poolCount('ติดต่ออีกครั้ง') }}</p>
+              </div>
+            </div>
+            <div v-if="overduePool.length" class="mt-4 bg-white rounded-2xl p-4 shadow-soft border border-brand-100">
+              <p class="text-sm font-600 flex items-center gap-2 mb-2"><span class="bell-ring text-brand-500">🔔</span> ค้างเกิน 7 วัน ควรทักซ้ำ ({{ overduePool.length }})</p>
+              <div class="flex flex-wrap gap-2">
+                <button v-for="p in overduePool" :key="p.id" @click="go('pool'); openProfile(p)"
+                  class="text-xs px-3 py-1.5 rounded-full bg-brand-50 text-brand-700 hover:bg-brand-100 transition">
+                  {{ p.nickname }} · {{ daysSince(p.lastContactDate) }} วัน
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== DIRECTORY ===================== -->
+        <section v-if="active==='directory'" class="space-y-4">
+          <!-- toolbar -->
+          <div class="bg-white rounded-2xl p-4 shadow-soft border border-brand-50 space-y-3">
+            <div class="flex flex-col lg:flex-row gap-3">
+              <div class="relative flex-1">
+                <svg viewBox="0 0 24 24" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3" stroke-linecap="round"/></svg>
+                <input v-model="search" placeholder="ค้นหาชื่อ, ชื่อโซเชียล หรือ ID Line…"
+                  class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-brand-50/60 border border-transparent focus:border-brand-300 focus:bg-white outline-none text-sm transition">
+              </div>
+              <div class="flex gap-2">
+                <div class="flex rounded-xl bg-brand-50 p-1">
+                  <button @click="dirView='table'" class="px-3 py-1.5 rounded-lg text-xs font-500 transition" :class="dirView==='table'?'bg-white shadow-sm text-brand-700':'text-ink-500'">ตาราง</button>
+                  <button @click="dirView='grid'" class="px-3 py-1.5 rounded-lg text-xs font-500 transition" :class="dirView==='grid'?'bg-white shadow-sm text-brand-700':'text-ink-500'">การ์ด</button>
+                </div>
+                <button @click="openForm(null,false)" class="px-4 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-600 hover:bg-brand-600 shadow-soft transition flex items-center gap-1.5">
+                  <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+                  เพิ่ม Influencer
+                </button>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+              <select v-model="fTier" class="filter-sel">
+                <option value="">ทุก Tier</option><option v-for="t in tiers" :key="t">{{ t }}</option>
+              </select>
+              <select v-model="fPlatform" class="filter-sel">
+                <option value="">ทุกแพลตฟอร์ม</option><option v-for="p in platforms" :key="p">{{ p }}</option>
+              </select>
+              <select v-model="fCategory" class="filter-sel">
+                <option value="">ทุกประเภท</option><option v-for="c in categories" :key="c">{{ c }}</option>
+              </select>
+              <select v-model="fRate" class="filter-sel">
+                <option value="">ทุกช่วงราคา</option>
+                <option value="0-3000">ต่ำกว่า 3,000</option>
+                <option value="3000-10000">3,000 - 10,000</option>
+                <option value="10000-30000">10,000 - 30,000</option>
+                <option value="30000-999999999">มากกว่า 30,000</option>
+              </select>
+              <button v-if="hasFilter" @click="clearFilter" class="text-xs text-brand-600 px-2 py-1 hover:underline">ล้างตัวกรอง</button>
+              <span class="ml-auto text-xs text-ink-500">พบ {{ filteredMain.length }} รายชื่อ</span>
+            </div>
+          </div>
+
+          <!-- table view -->
+          <div v-if="dirView==='table'" class="bg-white rounded-2xl shadow-soft border border-brand-50 overflow-x-auto">
+            <table class="w-full text-sm min-w-[820px]">
+              <thead class="bg-brand-50/60">
+                <tr class="text-left text-xs text-ink-500">
+                  <th class="py-3 px-4 font-500">Influencer</th>
+                  <th class="py-3 px-3 font-500">ช่องทาง</th>
+                  <th class="py-3 px-3 font-500">ผู้ติดตาม</th>
+                  <th class="py-3 px-3 font-500">เรทเริ่มต้น</th>
+                  <th class="py-3 px-3 font-500">สถานะ</th>
+                  <th class="py-3 px-3 font-500">คะแนน</th>
+                  <th class="py-3 px-3 font-500 text-right">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="inf in filteredMain" :key="inf.id" class="border-t border-brand-50 hover:bg-brand-50/40 transition cursor-pointer" @click="openProfile(inf)">
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-3">
+                      <div v-html="avatarHtml(inf,9)"></div>
+                      <div>
+                        <p class="font-600 leading-tight">{{ inf.nickname }}</p>
+                        <p class="text-[11px] text-ink-500">{{ inf.category }} · {{ inf.tier }}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-3 px-3"><span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-brand-50 text-brand-700">{{ inf.mainPlatform }}</span></td>
+                  <td class="py-3 px-3 font-500">{{ fmtFollowers(mainFollowers(inf)) }}</td>
+                  <td class="py-3 px-3 font-600 text-brand-600">฿{{ fmt(inf.startingRate) }}</td>
+                  <td class="py-3 px-3"><span class="status-pill" :class="profileStatusClass(inf.profileStatus)">{{ inf.profileStatus }}</span></td>
+                  <td class="py-3 px-3 text-amber-400 whitespace-nowrap">{{ stars(inf.rating) }}</td>
+                  <td class="py-3 px-3 text-right" @click.stop>
+                    <button @click="openForm(inf,false)" class="icon-btn">✏️</button>
+                    <button @click="remove(inf.id)" class="icon-btn">🗑️</button>
+                  </td>
+                </tr>
+                <tr v-if="!filteredMain.length"><td colspan="7" class="text-center text-ink-500 py-10 text-sm">ไม่พบรายชื่อที่ตรงกับเงื่อนไข</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- grid view -->
+          <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div v-for="inf in filteredMain" :key="inf.id" @click="openProfile(inf)"
+              class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50 hover:shadow-card hover:-translate-y-0.5 transition cursor-pointer">
+              <div class="flex items-start justify-between">
+                <div v-html="avatarHtml(inf,14)"></div>
+                <span class="status-pill" :class="profileStatusClass(inf.profileStatus)">{{ inf.profileStatus }}</span>
+              </div>
+              <p class="font-600 mt-3 leading-tight">{{ inf.nickname }}</p>
+              <p class="text-xs text-ink-500">{{ inf.fullName }}</p>
+              <div class="flex flex-wrap gap-1.5 mt-2">
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">{{ inf.category }}</span>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">{{ inf.tier }}</span>
+              </div>
+              <div class="flex items-center justify-between mt-4 pt-3 border-t border-brand-50">
+                <div>
+                  <p class="text-[10px] text-ink-500">{{ inf.mainPlatform }}</p>
+                  <p class="text-sm font-600">{{ fmtFollowers(mainFollowers(inf)) }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[10px] text-ink-500">เรทเริ่มต้น</p>
+                  <p class="text-sm font-600 text-brand-600">฿{{ fmt(inf.startingRate) }}</p>
+                </div>
+              </div>
+              <div class="flex items-center justify-between mt-2">
+                <span class="text-amber-400 text-sm">{{ stars(inf.rating) }}</span>
+                <div @click.stop class="flex gap-1">
+                  <button @click="openForm(inf,false)" class="icon-btn">✏️</button>
+                  <button @click="remove(inf.id)" class="icon-btn">🗑️</button>
+                </div>
+              </div>
+            </div>
+            <div v-if="!filteredMain.length" class="col-span-full text-center text-ink-500 py-10 text-sm">ไม่พบรายชื่อที่ตรงกับเงื่อนไข</div>
+          </div>
+        </section>
+
+        <!-- ===================== POOL ===================== -->
+        <section v-if="active==='pool'" class="space-y-4">
+          <!-- pool dashboard -->
+          <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div class="bg-white rounded-2xl p-4 shadow-soft border border-brand-50">
+              <p class="text-xs text-ink-500">ใน Pool</p>
+              <p class="text-2xl font-700 text-brand-600">{{ poolInfluencers.length }}</p>
+            </div>
+            <div class="bg-white rounded-2xl p-4 shadow-soft border border-brand-50">
+              <p class="text-xs text-ink-500">ติดต่อแล้ว</p>
+              <p class="text-2xl font-700 text-emerald-500">{{ poolCount('ติดต่อแล้ว') }}</p>
+            </div>
+            <div class="bg-white rounded-2xl p-4 shadow-soft border border-brand-50">
+              <p class="text-xs text-ink-500">รอการตอบกลับ</p>
+              <p class="text-2xl font-700 text-amber-500">{{ poolCount('รอการตอบกลับ') }}</p>
+            </div>
+            <div class="bg-white rounded-2xl p-4 shadow-soft border border-brand-50">
+              <p class="text-xs text-ink-500">อ่านไม่ตอบ</p>
+              <p class="text-2xl font-700 text-orange-500">{{ poolCount('อ่านไม่ตอบ') }}</p>
+            </div>
+            <div class="bg-white rounded-2xl p-4 shadow-soft border border-brand-50 col-span-2 lg:col-span-1">
+              <p class="text-xs text-ink-500 flex items-center gap-1"><span class="text-brand-500">🔔</span> ควรทักซ้ำ</p>
+              <p class="text-2xl font-700 text-brand-600">{{ overduePool.length }}</p>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3 items-center">
+            <div class="relative flex-1 w-full">
+              <svg viewBox="0 0 24 24" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3" stroke-linecap="round"/></svg>
+              <input v-model="poolSearch" placeholder="ค้นหาใน Pool…" class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-brand-50 focus:border-brand-300 outline-none text-sm transition shadow-soft">
+            </div>
+            <button @click="openForm(null,true)" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-600 hover:bg-brand-600 shadow-soft transition flex items-center justify-center gap-1.5">
+              <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+              เพิ่มเข้า Pool
+            </button>
+          </div>
+
+          <div class="bg-white rounded-2xl shadow-soft border border-brand-50 overflow-x-auto">
+            <table class="w-full text-sm min-w-[860px]">
+              <thead class="bg-brand-50/60">
+                <tr class="text-left text-xs text-ink-500">
+                  <th class="py-3 px-4 font-500">Influencer</th>
+                  <th class="py-3 px-3 font-500">Tag / ประเภท</th>
+                  <th class="py-3 px-3 font-500">ช่องทาง</th>
+                  <th class="py-3 px-3 font-500">ผู้ติดตาม</th>
+                  <th class="py-3 px-3 font-500">ติดต่อล่าสุด</th>
+                  <th class="py-3 px-3 font-500">สถานะ Pool</th>
+                  <th class="py-3 px-3 font-500 text-right">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="inf in filteredPool" :key="inf.id"
+                  class="border-t border-brand-50 hover:bg-brand-50/40 transition cursor-pointer"
+                  :class="isOverdue(inf) ? 'bg-brand-50/60' : ''" @click="openProfile(inf)">
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-3">
+                      <span v-if="isOverdue(inf)" class="bell-ring text-brand-500" title="ค้างเกิน 7 วัน">🔔</span>
+                      <div v-html="avatarHtml(inf,9)"></div>
+                      <div>
+                        <p class="font-600 leading-tight">{{ inf.nickname }}</p>
+                        <p class="text-[11px] text-ink-500">{{ inf.tier }}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-3 px-3"><span class="text-[11px] px-2 py-1 rounded-lg bg-brand-100 text-brand-700">{{ inf.tag || inf.category }}</span></td>
+                  <td class="py-3 px-3"><span class="text-xs px-2 py-1 rounded-lg bg-brand-50 text-brand-700">{{ inf.mainPlatform }}</span></td>
+                  <td class="py-3 px-3 font-500">{{ fmtFollowers(mainFollowers(inf)) }}</td>
+                  <td class="py-3 px-3 text-xs" :class="isOverdue(inf)?'text-brand-600 font-600':'text-ink-500'">
+                    {{ thDate(inf.lastContactDate) }}
+                    <span v-if="isOverdue(inf)" class="block text-[10px]">({{ daysSince(inf.lastContactDate) }} วันแล้ว)</span>
+                  </td>
+                  <td class="py-3 px-3"><span class="status-pill" :class="poolStatusClass(inf.poolStatus)">{{ inf.poolStatus }}</span></td>
+                  <td class="py-3 px-3 text-right" @click.stop>
+                    <button @click="promoteToMain(inf)" class="text-[11px] px-2 py-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition" title="ดึงเข้าคลังหลัก">↑ คลังหลัก</button>
+                    <button @click="openForm(inf,true)" class="icon-btn">✏️</button>
+                    <button @click="remove(inf.id)" class="icon-btn">🗑️</button>
+                  </td>
+                </tr>
+                <tr v-if="!filteredPool.length"><td colspan="7" class="text-center text-ink-500 py-10 text-sm">Pool ว่างเปล่า — กด “เพิ่มเข้า Pool” เพื่อเริ่ม</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===================== CUSTOMERS ===================== -->
+        <section v-if="active==='customers'" class="space-y-4">
+          <!-- customer dashboard -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+              <p class="text-xs text-ink-500 mb-1">ลูกค้า/Lead ทั้งหมด</p>
+              <p class="text-3xl font-700 text-brand-600">{{ customers.length }}</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+              <p class="text-xs text-ink-500 mb-1">ลูกค้าจริง (Active)</p>
+              <p class="text-3xl font-700 text-emerald-500">{{ customers.filter(c=>c.pipelineStatus==='Active Client').length }}</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+              <p class="text-xs text-ink-500 mb-1">มูลค่าจ้างงานรวม</p>
+              <p class="text-2xl font-700 text-brand-600">฿{{ fmt(totalSpent) }}</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50">
+              <p class="text-xs text-ink-500 mb-1">ยอดค้างเก็บงวดสุดท้าย</p>
+              <p class="text-2xl font-700 text-orange-500">฿{{ fmt(totalRemaining) }}</p>
+            </div>
+          </div>
+
+          <div class="grid lg:grid-cols-3 gap-4">
+            <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50 lg:col-span-1">
+              <p class="text-sm font-600 mb-3">สัดส่วนประเภทธุรกิจ</p>
+              <div class="space-y-3">
+                <div v-for="b in businessDist" :key="b.name">
+                  <div class="flex justify-between text-xs mb-1"><span>{{ b.name }}</span><span class="font-600 text-brand-600">{{ b.count }}</span></div>
+                  <div class="h-2 rounded-full bg-brand-50 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-brand-300 to-brand-500" :style="{width:(b.count/customers.length*100)+'%'}"></div></div>
+                </div>
+                <p v-if="!businessDist.length" class="text-xs text-ink-500">ยังไม่มีข้อมูล</p>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-soft border border-brand-50 lg:col-span-2">
+              <p class="text-sm font-600 mb-3">มูลค่าจ้างงานแยกรายเจ้า</p>
+              <div class="space-y-2.5">
+                <div v-for="c in [...customers].sort((a,b)=>b.totalBudgetSpent-a.totalBudgetSpent)" :key="c.id" class="flex items-center gap-3">
+                  <span class="text-xs w-32 truncate shrink-0">{{ c.companyName }}</span>
+                  <div class="flex-1 h-3 rounded-full bg-brand-50 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600" :style="{width: maxSpent? (c.totalBudgetSpent/maxSpent*100)+'%':'0%'}"></div></div>
+                  <span class="text-xs font-600 text-brand-600 w-20 text-right shrink-0">฿{{ fmt(c.totalBudgetSpent) }}</span>
+                </div>
+                <p v-if="!customers.length" class="text-xs text-ink-500">ยังไม่มีข้อมูล</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3 items-center">
+            <div class="relative flex-1 w-full">
+              <svg viewBox="0 0 24 24" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3" stroke-linecap="round"/></svg>
+              <input v-model="custSearch" placeholder="ค้นหาลูกค้า / ผู้ติดต่อ…" class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-brand-50 focus:border-brand-300 outline-none text-sm transition shadow-soft">
+            </div>
+            <select v-model="fPipeline" class="filter-sel">
+              <option value="">ทุกสถานะ</option><option v-for="s in pipelineStatuses" :key="s">{{ s }}</option>
+            </select>
+            <button @click="openCustomerForm(null)" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-600 hover:bg-brand-600 shadow-soft transition flex items-center justify-center gap-1.5">
+              <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+              เพิ่มลูกค้า
+            </button>
+          </div>
+
+          <div class="bg-white rounded-2xl shadow-soft border border-brand-50 overflow-x-auto">
+            <table class="w-full text-sm min-w-[980px]">
+              <thead class="bg-brand-50/60">
+                <tr class="text-left text-xs text-ink-500">
+                  <th class="py-3 px-4 font-500">บริษัท / ลูกค้า</th>
+                  <th class="py-3 px-3 font-500">ผู้ติดต่อ</th>
+                  <th class="py-3 px-3 font-500">บริการที่สนใจ</th>
+                  <th class="py-3 px-3 font-500">เคยใช้ Influencer</th>
+                  <th class="py-3 px-3 font-500">จ้างไปแล้ว</th>
+                  <th class="py-3 px-3 font-500">คงเหลือ</th>
+                  <th class="py-3 px-3 font-500">สถานะ</th>
+                  <th class="py-3 px-3 font-500 text-right">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in filteredCustomers" :key="c.id" class="border-t border-brand-50 hover:bg-brand-50/40 transition cursor-pointer" @click="openCustomerForm(c)">
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-2">
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-600" :class="c.type==='Customer'?'bg-emerald-100 text-emerald-700':'bg-amber-100 text-amber-700'">{{ c.type==='Customer'?'ลูกค้า':'Lead' }}</span>
+                      <div>
+                        <p class="font-600 leading-tight">{{ c.companyName }}</p>
+                        <p class="text-[11px] text-ink-500">{{ c.businessType }} · {{ c.leadSource }}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-3 px-3">
+                    <p class="text-xs font-500">{{ c.contactPerson }}</p>
+                    <p class="text-[11px] text-ink-500">{{ c.tel }}</p>
+                  </td>
+                  <td class="py-3 px-3"><div class="flex flex-wrap gap-1">
+                    <span v-for="s in c.servicesInterested" :key="s" class="text-[10px] px-1.5 py-0.5 rounded bg-brand-50 text-brand-700">{{ s }}</span>
+                  </div></td>
+                  <td class="py-3 px-3"><div class="flex flex-wrap gap-1">
+                    <span v-for="id in c.influencerHistory" :key="id" class="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600">{{ infName(id) }}</span>
+                    <span v-if="!c.influencerHistory.length" class="text-[11px] text-ink-500">—</span>
+                  </div></td>
+                  <td class="py-3 px-3 font-600 text-brand-600">฿{{ fmt(c.totalBudgetSpent) }}</td>
+                  <td class="py-3 px-3 font-500" :class="c.remainingBalance>0?'text-orange-500':'text-ink-500'">฿{{ fmt(c.remainingBalance) }}</td>
+                  <td class="py-3 px-3"><span class="status-pill" :class="pipelineClass(c.pipelineStatus)">{{ c.pipelineStatus }}</span></td>
+                  <td class="py-3 px-3 text-right" @click.stop>
+                    <button @click="openCustomerForm(c)" class="icon-btn">✏️</button>
+                    <button @click="removeCustomer(c.id)" class="icon-btn">🗑️</button>
+                  </td>
+                </tr>
+                <tr v-if="!filteredCustomers.length"><td colspan="8" class="text-center text-ink-500 py-10 text-sm">ยังไม่มีลูกค้า</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============ PROFILE MODAL ============ -->
+  <transition name="fade">
+  <div v-if="profile" class="fixed inset-0 z-50 flex items-start md:items-center justify-center p-3 md:p-6 overflow-y-auto" @click.self="profile=null">
+    <div class="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-3xl shadow-card w-full max-w-3xl my-4 pop">
+      <!-- header -->
+      <div class="relative h-24 rounded-t-3xl bg-gradient-to-r from-brand-300 via-brand-400 to-brand-500">
+        <button @click="profile=null" class="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/30 hover:bg-white/50 text-white flex items-center justify-center transition">✕</button>
+      </div>
+      <div class="px-6 pb-6 -mt-10">
+        <div class="flex items-end gap-4">
+          <div v-html="avatarHtml(profile,20,true)"></div>
+          <div class="pb-1 flex-1 min-w-0">
+            <h3 class="text-xl font-700 leading-tight">{{ profile.nickname }}</h3>
+            <p class="text-sm text-ink-500">{{ profile.fullName }}</p>
+          </div>
+          <div class="flex flex-col items-end gap-1 pb-1">
+            <span class="status-pill" :class="profile.isPool ? poolStatusClass(profile.poolStatus) : profileStatusClass(profile.profileStatus)">
+              {{ profile.isPool ? profile.poolStatus : profile.profileStatus }}
+            </span>
+            <span class="text-amber-400 text-sm">{{ stars(profile.rating) }}</span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2 mt-4">
+          <span class="text-xs px-2.5 py-1 rounded-full bg-brand-50 text-brand-700">{{ profile.category }}</span>
+          <span class="text-xs px-2.5 py-1 rounded-full bg-brand-50 text-brand-700">{{ profile.tier }}</span>
+          <span class="text-xs px-2.5 py-1 rounded-full bg-brand-50 text-brand-700">{{ profile.mainPlatform }}</span>
+          <span v-if="!profile.isPool" class="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-600">Workflow: {{ profile.campaignStatus }}</span>
+        </div>
+
+        <!-- Section 1: Bio & Contact -->
+        <div class="mt-5">
+          <p class="section-h">① ข้อมูลทั่วไป & การติดต่อ</p>
+          <div class="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <div class="info-row"><span>Line</span><b>{{ profile.contact.line || '—' }}</b></div>
+            <div class="info-row"><span>อีเมล</span><b>{{ profile.contact.email || '—' }}</b></div>
+            <div class="info-row"><span>เบอร์โทร</span><b>{{ profile.contact.tel || '—' }}</b></div>
+            <div class="info-row"><span>เดินทางนอกสถานที่</span><b :class="profile.canTravel?'text-emerald-600':'text-ink-500'">{{ profile.canTravel?'สะดวก':'ไม่สะดวก' }}</b></div>
+            <div class="info-row sm:col-span-2"><span>ที่อยู่ส่งของ</span><b class="text-right">{{ profile.address || '—' }}</b></div>
+            <div class="info-row sm:col-span-2"><span>Google Drive ผลงาน</span>
+              <a v-if="profile.driveLink" :href="profile.driveLink" target="_blank" class="text-brand-600 hover:underline truncate max-w-[60%]">เปิดลิงก์ ↗</a>
+              <b v-else>—</b>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Social Metrics -->
+        <div class="mt-5">
+          <p class="section-h">② โซเชียลมีเดีย & ตัวเลข</p>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <a v-for="(p,i) in profile.platforms" :key="i" :href="p.url||'#'" :target="p.url?'_blank':'_self'"
+              class="block rounded-xl border border-brand-50 p-3 hover:border-brand-300 hover:bg-brand-50/40 transition">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-600 flex items-center gap-1.5">{{ p.name }} <span v-if="p.url" class="text-brand-400 text-xs">↗</span></span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">ER {{ p.engagement }}%</span>
+              </div>
+              <div class="flex items-end justify-between mt-1">
+                <p class="text-lg font-700 text-brand-600">{{ fmtFollowers(p.followers) }}</p>
+                <p class="text-[11px] text-ink-500">{{ p.contentType }}</p>
+              </div>
+            </a>
+            <p v-if="!profile.platforms.length" class="text-xs text-ink-500">ยังไม่มีช่องทาง</p>
+          </div>
+        </div>
+
+        <!-- Section 3: Rate Card -->
+        <div class="mt-5">
+          <p class="section-h">③ Rate Card & บริการ</p>
+          <div class="rounded-xl border border-brand-50 overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-brand-50/60 text-xs text-ink-500"><tr><th class="text-left py-2 px-3 font-500">บริการ</th><th class="text-right py-2 px-3 font-500">ราคา</th><th class="text-left py-2 px-3 font-500">เงื่อนไข</th></tr></thead>
+              <tbody>
+                <tr v-for="(r,i) in profile.rateCard" :key="i" class="border-t border-brand-50">
+                  <td class="py-2 px-3 font-500">{{ r.service }}</td>
+                  <td class="py-2 px-3 text-right font-600 text-brand-600">฿{{ fmt(r.price) }}</td>
+                  <td class="py-2 px-3 text-xs text-ink-500">{{ r.condition || '—' }}</td>
+                </tr>
+                <tr v-if="!profile.rateCard.length"><td colspan="3" class="text-center text-ink-500 py-3 text-xs">ยังไม่มี Rate Card</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 4: History & Review -->
+        <div class="mt-5">
+          <p class="section-h">④ ประวัติร่วมงาน & รีวิวทีม</p>
+          <div class="relative pl-5 space-y-3 before:absolute before:left-1.5 before:top-1 before:bottom-1 before:w-px before:bg-brand-100">
+            <div v-for="(h,i) in profile.history" :key="i" class="relative">
+              <span class="absolute -left-[18px] top-1.5 w-2.5 h-2.5 rounded-full bg-brand-400 ring-4 ring-brand-50"></span>
+              <div class="flex items-center justify-between flex-wrap gap-1">
+                <p class="text-sm font-600">{{ h.brand }} <span v-if="h.clientId" class="text-[11px] font-400 text-violet-600">· ลูกค้า: {{ infCustomerName(h.clientId) }}</span></p>
+                <span class="text-[11px] text-ink-500">{{ h.date }}</span>
+              </div>
+              <a v-if="h.link" :href="h.link" target="_blank" class="text-xs text-brand-600 hover:underline">ดูผลงาน ↗</a>
+              <p v-if="h.note" class="text-xs text-ink-500 mt-0.5">{{ h.note }}</p>
+            </div>
+            <p v-if="!profile.history.length" class="text-xs text-ink-500">ยังไม่เคยร่วมงาน</p>
+          </div>
+          <div v-if="profile.teamNote" class="mt-3 rounded-xl bg-amber-50 border border-amber-100 p-3">
+            <p class="text-[11px] font-600 text-amber-700 mb-0.5">📝 โน้ตภายในทีม</p>
+            <p class="text-xs text-amber-800">{{ profile.teamNote }}</p>
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-6">
+          <button @click="openForm(profile,profile.isPool); " class="flex-1 py-2.5 rounded-xl bg-brand-500 text-white font-600 text-sm hover:bg-brand-600 transition">แก้ไขข้อมูล</button>
+          <button @click="profile=null" class="px-5 py-2.5 rounded-xl border border-brand-100 text-ink-700 font-500 text-sm hover:bg-brand-50 transition">ปิด</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </transition>
+
+  <!-- ============ INFLUENCER FORM MODAL ============ -->
+  <transition name="fade">
+  <div v-if="form" class="fixed inset-0 z-50 flex items-start justify-center p-3 md:p-6 overflow-y-auto" @click.self="form=null">
+    <div class="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-3xl shadow-card w-full max-w-2xl my-4 pop">
+      <div class="sticky top-0 bg-white rounded-t-3xl px-6 py-4 border-b border-brand-50 flex items-center justify-between z-10">
+        <h3 class="font-700 text-lg">{{ form.id ? 'แก้ไข' : 'เพิ่ม' }} {{ form.isPool ? 'Influencer ใน Pool' : 'Influencer' }}</h3>
+        <button @click="form=null" class="w-8 h-8 rounded-full hover:bg-brand-50 flex items-center justify-center">✕</button>
+      </div>
+      <div class="px-6 py-5 space-y-5 max-h-[72vh] overflow-y-auto">
+        <!-- basic -->
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div><label class="lbl">ชื่อจริง-นามสกุล</label><input v-model="form.fullName" class="inp"></div>
+          <div><label class="lbl">ชื่อในวงการ/ชื่อเล่น *</label><input v-model="form.nickname" class="inp"></div>
+          <div><label class="lbl">รูปโปรไฟล์ (URL)</label><input v-model="form.avatar" class="inp" placeholder="วาง URL หรือเว้นว่างเพื่อใช้ตัวอักษร"></div>
+          <div><label class="lbl">ประเภท (Category)</label>
+            <input v-model="form.category" list="catlist" class="inp">
+            <datalist id="catlist"><option v-for="c in categories" :key="c">{{ c }}</option></datalist>
+          </div>
+          <div><label class="lbl">ระดับ (Tier)</label><select v-model="form.tier" class="inp"><option v-for="t in tiers" :key="t">{{ t }}</option></select></div>
+          <div><label class="lbl">แพลตฟอร์มหลัก</label><select v-model="form.mainPlatform" class="inp"><option v-for="p in platforms" :key="p">{{ p }}</option></select></div>
+          <div><label class="lbl">เรทเริ่มต้น (บาท)</label><input v-model.number="form.startingRate" type="number" class="inp"></div>
+          <div><label class="lbl">คะแนนความพึงพอใจ</label><select v-model.number="form.rating" class="inp"><option v-for="n in [5,4,3,2,1]" :key="n" :value="n">{{ stars(n) }} ({{ n }})</option></select></div>
+        </div>
+
+        <!-- contact -->
+        <div>
+          <p class="section-h">ข้อมูลติดต่อ</p>
+          <div class="grid sm:grid-cols-3 gap-3">
+            <div><label class="lbl">Line ID</label><input v-model="form.contact.line" class="inp"></div>
+            <div><label class="lbl">อีเมล</label><input v-model="form.contact.email" class="inp"></div>
+            <div><label class="lbl">เบอร์โทร</label><input v-model="form.contact.tel" class="inp"></div>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3 mt-3">
+            <div><label class="lbl">ที่อยู่ส่งของ</label><input v-model="form.address" class="inp"></div>
+            <div><label class="lbl">ลิงก์ Google Drive</label><input v-model="form.driveLink" class="inp"></div>
+          </div>
+          <label class="flex items-center gap-2 mt-3 text-sm cursor-pointer"><input type="checkbox" v-model="form.canTravel" class="accent-brand-500 w-4 h-4"> สะดวกเดินทางไปนอกสถานที่</label>
+        </div>
+
+        <!-- platforms -->
+        <div>
+          <div class="flex items-center justify-between mb-2"><p class="section-h !mb-0">ช่องทางโซเชียล & ตัวเลข</p>
+            <button @click="form.platforms.push({name:'Instagram',url:'',followers:0,engagement:0,contentType:''})" class="text-xs text-brand-600 font-500">+ เพิ่มช่องทาง</button>
+          </div>
+          <div v-for="(p,i) in form.platforms" :key="i" class="grid grid-cols-12 gap-2 mb-2 items-center">
+            <select v-model="p.name" class="inp col-span-3 !py-2"><option v-for="pl in platforms" :key="pl">{{ pl }}</option></select>
+            <input v-model="p.url" placeholder="URL" class="inp col-span-3 !py-2">
+            <input v-model.number="p.followers" type="number" placeholder="Followers" class="inp col-span-2 !py-2">
+            <input v-model.number="p.engagement" type="number" step="0.1" placeholder="ER%" class="inp col-span-2 !py-2">
+            <input v-model="p.contentType" placeholder="คอนเทนต์" class="inp col-span-1 !py-2 !px-2">
+            <button @click="form.platforms.splice(i,1)" class="col-span-1 text-brand-400 hover:text-brand-600">✕</button>
+          </div>
+          <p v-if="!form.platforms.length" class="text-xs text-ink-500">ยังไม่มีช่องทาง</p>
+        </div>
+
+        <!-- rate card -->
+        <div>
+          <div class="flex items-center justify-between mb-2"><p class="section-h !mb-0">Rate Card</p>
+            <button @click="form.rateCard.push({service:'',price:0,condition:''})" class="text-xs text-brand-600 font-500">+ เพิ่มบริการ</button>
+          </div>
+          <div v-for="(r,i) in form.rateCard" :key="i" class="grid grid-cols-12 gap-2 mb-2">
+            <input v-model="r.service" placeholder="บริการ เช่น ภาพนิ่ง 1 โพสต์" class="inp col-span-5 !py-2">
+            <input v-model.number="r.price" type="number" placeholder="ราคา" class="inp col-span-3 !py-2">
+            <input v-model="r.condition" placeholder="เงื่อนไข" class="inp col-span-3 !py-2">
+            <button @click="form.rateCard.splice(i,1)" class="col-span-1 text-brand-400 hover:text-brand-600">✕</button>
+          </div>
+          <p v-if="!form.rateCard.length" class="text-xs text-ink-500">ยังไม่มี Rate Card</p>
+        </div>
+
+        <!-- status -->
+        <div>
+          <p class="section-h">สถานะ</p>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div v-if="!form.isPool"><label class="lbl">Profile Status</label><select v-model="form.profileStatus" class="inp"><option>Active</option><option>In-Conversation</option></select></div>
+            <div v-if="!form.isPool"><label class="lbl">Campaign Workflow</label><select v-model="form.campaignStatus" class="inp"><option v-for="s in campaignStatuses" :key="s">{{ s }}</option></select></div>
+            <div v-if="form.isPool"><label class="lbl">Pool Status</label><select v-model="form.poolStatus" class="inp"><option v-for="s in poolStatuses" :key="s">{{ s }}</option></select></div>
+            <div v-if="form.isPool"><label class="lbl">วันที่ติดต่อล่าสุด</label><input v-model="form.lastContactDate" type="date" class="inp"></div>
+            <div v-if="form.isPool"><label class="lbl">Tag / ประเภท Influencer</label><input v-model="form.tag" class="inp" placeholder="เช่น สายรีวิว, สายฮา"></div>
+          </div>
+          <div class="mt-3"><label class="lbl">โน้ตภายในทีม</label><textarea v-model="form.teamNote" rows="2" class="inp" placeholder="เช่น ทำงานตรงเวลา, แก้งานบ่อย"></textarea></div>
+        </div>
+      </div>
+      <div class="sticky bottom-0 bg-white rounded-b-3xl px-6 py-4 border-t border-brand-50 flex gap-2">
+        <button @click="saveForm" class="flex-1 py-2.5 rounded-xl bg-brand-500 text-white font-600 text-sm hover:bg-brand-600 transition">บันทึก</button>
+        <button @click="form=null" class="px-5 py-2.5 rounded-xl border border-brand-100 text-ink-700 font-500 text-sm hover:bg-brand-50 transition">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+  </transition>
+
+  <!-- ============ CUSTOMER FORM MODAL ============ -->
+  <transition name="fade">
+  <div v-if="custForm" class="fixed inset-0 z-50 flex items-start justify-center p-3 md:p-6 overflow-y-auto" @click.self="custForm=null">
+    <div class="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-3xl shadow-card w-full max-w-2xl my-4 pop">
+      <div class="sticky top-0 bg-white rounded-t-3xl px-6 py-4 border-b border-brand-50 flex items-center justify-between z-10">
+        <h3 class="font-700 text-lg">{{ custForm.id ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า' }}</h3>
+        <button @click="custForm=null" class="w-8 h-8 rounded-full hover:bg-brand-50 flex items-center justify-center">✕</button>
+      </div>
+      <div class="px-6 py-5 space-y-5 max-h-[72vh] overflow-y-auto">
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div><label class="lbl">ชื่อบริษัท/ลูกค้า *</label><input v-model="custForm.companyName" class="inp"></div>
+          <div><label class="lbl">ประเภทธุรกิจ</label><input v-model="custForm.businessType" list="biztype" class="inp"><datalist id="biztype"><option>Beauty</option><option>Food & Beverage</option><option>Technology</option><option>Fashion</option><option>Travel</option><option>Health</option></datalist></div>
+          <div><label class="lbl">ผู้ติดต่อหลัก</label><input v-model="custForm.contactPerson" class="inp"></div>
+          <div><label class="lbl">เบอร์โทร</label><input v-model="custForm.tel" class="inp"></div>
+          <div><label class="lbl">อีเมล</label><input v-model="custForm.email" class="inp"></div>
+          <div><label class="lbl">ช่องทางที่ติดต่อมา (Lead Source)</label><input v-model="custForm.leadSource" list="leadsrc" class="inp"><datalist id="leadsrc"><option>Facebook</option><option>Instagram</option><option>แนะนำต่อ</option><option>เว็บไซต์</option><option>Email</option></datalist></div>
+        </div>
+
+        <div>
+          <label class="lbl">บริการที่สนใจ</label>
+          <div class="flex flex-wrap gap-2 mt-1">
+            <label v-for="s in ['IG','TikTok','YouTube','Facebook','Event']" :key="s" class="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl border cursor-pointer transition" :class="custForm.servicesInterested.includes(s)?'border-brand-400 bg-brand-50 text-brand-700':'border-brand-50 text-ink-700'">
+              <input type="checkbox" :value="s" v-model="custForm.servicesInterested" class="accent-brand-500"> {{ s }}
+            </label>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-4">
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" v-model="custForm.hasAsset" class="accent-brand-500 w-4 h-4"> มี Asset ให้ใช้งาน</label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" v-model="custForm.hasGenCode" class="accent-brand-500 w-4 h-4"> มีการ Gen Code (Affiliate/Discount)</label>
+        </div>
+
+        <div>
+          <label class="lbl">เคยใช้ Influencer (เลือกได้หลายคน — เช็กไม่ให้ซ้ำ)</label>
+          <div class="grid sm:grid-cols-2 gap-1.5 mt-1 max-h-40 overflow-y-auto rounded-xl border border-brand-50 p-2">
+            <label v-for="inf in mainInfluencers" :key="inf.id" class="flex items-center gap-2 text-sm px-2 py-1 rounded-lg cursor-pointer hover:bg-brand-50">
+              <input type="checkbox" :value="inf.id" v-model="custForm.influencerHistory" class="accent-brand-500"> {{ inf.nickname }} <span class="text-[11px] text-ink-500">({{ inf.category }})</span>
+            </label>
+            <p v-if="!mainInfluencers.length" class="text-xs text-ink-500">ยังไม่มี Influencer ในคลังหลัก</p>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div><label class="lbl">งบที่จ้างไปแล้ว (บาท)</label><input v-model.number="custForm.totalBudgetSpent" type="number" class="inp"></div>
+          <div><label class="lbl">ยอดคงเหลือต้องเก็บ (บาท)</label><input v-model.number="custForm.remainingBalance" type="number" class="inp"></div>
+          <div><label class="lbl">ประเภทรายชื่อ</label><select v-model="custForm.type" class="inp"><option value="Customer">ลูกค้าจริง (Customer)</option><option value="Lead">รายชื่อมุ่งหวัง (Lead)</option></select></div>
+          <div><label class="lbl">สถานะ Pipeline</label><select v-model="custForm.pipelineStatus" class="inp"><option v-for="s in pipelineStatuses" :key="s">{{ s }}</option></select></div>
+        </div>
+      </div>
+      <div class="sticky bottom-0 bg-white rounded-b-3xl px-6 py-4 border-t border-brand-50 flex gap-2">
+        <button @click="saveCustomer" class="flex-1 py-2.5 rounded-xl bg-brand-500 text-white font-600 text-sm hover:bg-brand-600 transition">บันทึก</button>
+        <button @click="custForm=null" class="px-5 py-2.5 rounded-xl border border-brand-100 text-ink-700 font-500 text-sm hover:bg-brand-50 transition">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+  </transition>
+
+  <!-- toast -->
+  <transition name="fade">
+    <div v-if="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] bg-ink-900 text-white text-sm px-4 py-2.5 rounded-xl shadow-card">{{ toast }}</div>
+  </transition>
+</div>
+
+<style>
+  .filter-sel{ font-size:.8rem; padding:.5rem .75rem; border-radius:.75rem; background:#fff5f9; border:1px solid transparent; outline:none; color:#4a4651; }
+  .filter-sel:focus{ border-color:#ffa9cd; background:#fff; }
+  .status-pill{ font-size:.7rem; padding:.15rem .55rem; border-radius:99px; font-weight:500; white-space:nowrap; }
+  .icon-btn{ font-size:.8rem; padding:.25rem .4rem; border-radius:.5rem; }
+  .icon-btn:hover{ background:#ffe6f1; }
+  .section-h{ font-size:.8rem; font-weight:600; color:#bd225b; margin-bottom:.6rem; }
+  .info-row{ display:flex; justify-content:space-between; gap:1rem; padding:.35rem 0; border-bottom:1px solid #fff0f6; }
+  .info-row span{ color:#8b8591; font-size:.8rem; }
+  .info-row b{ font-weight:500; }
+  .lbl{ display:block; font-size:.72rem; color:#8b8591; margin-bottom:.25rem; font-weight:500; }
+  .inp{ width:100%; padding:.55rem .75rem; border-radius:.7rem; border:1px solid #ffe6f1; background:#fff; outline:none; font-size:.85rem; font-family:inherit; transition:border-color .15s; }
+  .inp:focus{ border-color:#ffa9cd; }
+</style>
+
+<script>
+const { createApp } = Vue;
+
+// ---------- helpers for seeding relative dates ----------
+const daysAgo = n => { const d = new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); };
+
+createApp({
+  data() {
+    return {
+      active: 'dashboard',
+      mobileNav: false,
+      menus: [
+        { id:'dashboard', label:'Dashboard', icon:'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\'><rect x=\'3\' y=\'3\' width=\'7\' height=\'9\' rx=\'1.5\'/><rect x=\'14\' y=\'3\' width=\'7\' height=\'5\' rx=\'1.5\'/><rect x=\'14\' y=\'12\' width=\'7\' height=\'9\' rx=\'1.5\'/><rect x=\'3\' y=\'16\' width=\'7\' height=\'5\' rx=\'1.5\'/></svg>' },
+        { id:'directory', label:'คลังรายชื่อ Influencer', icon:'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\'><circle cx=\'9\' cy=\'8\' r=\'3\'/><path d=\'M4 19a5 5 0 0 1 10 0\' stroke-linecap=\'round\'/><path d=\'M16 7h5M16 11h5M16 15h3\' stroke-linecap=\'round\'/></svg>' },
+        { id:'pool', label:'Pool (รายชื่อภายนอก)', icon:'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\'><path d=\'M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0\' stroke-linecap=\'round\'/><path d=\'M3 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0\' stroke-linecap=\'round\'/><path d=\'M3 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0\' stroke-linecap=\'round\'/></svg>' },
+        { id:'customers', label:'ข้อมูลลูกค้า (CRM)', icon:'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\'><path d=\'M3 21V8l9-5 9 5v13\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/><rect x=\'9\' y=\'13\' width=\'6\' height=\'8\'/></svg>' },
+      ],
+      tiers: ['Nano','Micro','Macro','Mega'],
+      platforms: ['Instagram','TikTok','YouTube','Facebook','Twitter/X','Lemon8'],
+      categories: ['Beauty','Food','Lifestyle','Fashion','Tech','Travel','Gaming','Health'],
+      campaignStatuses: ['Proposed','Contacted','Contract Signed','Product Sent','Draft Reviewing','Published','Paid & Completed','Blacklisted'],
+      poolStatuses: ['ติดต่อแล้ว','รอการตอบกลับ','อ่านไม่ตอบ','ติดต่ออีกครั้ง'],
+      pipelineStatuses: ['New Customer','Lead','In-Conversation','Active Client'],
+      influencers: [],
+      customers: [],
+      // ui state
+      dirView: 'table',
+      search:'', fTier:'', fPlatform:'', fCategory:'', fRate:'',
+      poolSearch:'',
+      custSearch:'', fPipeline:'',
+      profile: null,
+      form: null,
+      custForm: null,
+      toast: '',
+    };
+  },
+
+  computed: {
+    subtitle() {
+      return { dashboard:'ภาพรวมระบบแบบเรียลไทม์', directory:'จัดการคลังรายชื่อหลัก',
+               pool:'ติดตามดีลกับอินฟลูฯ ภายนอก', customers:'เครื่องมือ CRM ติดตามลูกค้า & Lead' }[this.active];
+    },
+    mainInfluencers(){ return this.influencers.filter(i=>!i.isPool); },
+    poolInfluencers(){ return this.influencers.filter(i=>i.isPool); },
+    activeCampaigns(){ return this.mainInfluencers.filter(i=>['Contacted','Contract Signed','Product Sent','Draft Reviewing','Published'].includes(i.campaignStatus)).length; },
+    avgStartingRate(){ const a=this.mainInfluencers; return a.length? Math.round(a.reduce((s,i)=>s+(+i.startingRate||0),0)/a.length):0; },
+    avgRating(){ const a=this.mainInfluencers; return a.length? (a.reduce((s,i)=>s+(+i.rating||0),0)/a.length).toFixed(1):'0.0'; },
+    engagementByPlatform(){
+      const map={};
+      this.mainInfluencers.forEach(i=>{ const p=i.platforms.find(p=>p.name===i.mainPlatform)||i.platforms[0];
+        if(p){ (map[i.mainPlatform]=map[i.mainPlatform]||[]).push(+p.engagement||0); } });
+      return Object.keys(map).map(name=>({ name, avg:(map[name].reduce((a,b)=>a+b,0)/map[name].length).toFixed(1) }));
+    },
+    platformDonut(){
+      const colors=['#f64f8f','#ff79ad','#ffa9cd','#bd225b','#ffcfe3','#9c1f4d'];
+      const map={}; this.mainInfluencers.forEach(i=>{ map[i.mainPlatform]=(map[i.mainPlatform]||0)+1; });
+      const total=this.mainInfluencers.length||1; let acc=0;
+      return Object.keys(map).map((name,idx)=>{ const count=map[name]; const pct=count/total*100;
+        const seg={ name, count, color:colors[idx%colors.length], dash:`${pct} ${100-pct}`, offset:25-acc }; acc+=pct; return seg; });
+    },
+    activeCategories(){ return this.categories.filter(c=>this.mainInfluencers.some(i=>i.category===c)); },
+    matrix(){
+      const m={}; this.categories.forEach(c=>{ m[c]={}; this.tiers.forEach(t=>m[c][t]=0); });
+      this.mainInfluencers.forEach(i=>{ if(m[i.category]&&m[i.category][i.tier]!==undefined) m[i.category][i.tier]++; });
+      return m;
+    },
+    overduePool(){ return this.poolInfluencers.filter(i=>this.isOverdue(i)); },
+    filteredMain(){
+      let a=this.mainInfluencers;
+      const q=this.search.trim().toLowerCase();
+      if(q) a=a.filter(i=> (i.nickname+i.fullName).toLowerCase().includes(q)
+        || i.platforms.some(p=>(p.url||'').toLowerCase().includes(q))
+        || (i.contact.line||'').toLowerCase().includes(q) );
+      if(this.fTier) a=a.filter(i=>i.tier===this.fTier);
+      if(this.fPlatform) a=a.filter(i=>i.mainPlatform===this.fPlatform);
+      if(this.fCategory) a=a.filter(i=>i.category===this.fCategory);
+      if(this.fRate){ const [lo,hi]=this.fRate.split('-').map(Number); a=a.filter(i=>i.startingRate>=lo && i.startingRate<=hi); }
+      return a;
+    },
+    hasFilter(){ return this.fTier||this.fPlatform||this.fCategory||this.fRate; },
+    filteredPool(){
+      let a=this.poolInfluencers; const q=this.poolSearch.trim().toLowerCase();
+      if(q) a=a.filter(i=>(i.nickname+i.fullName+(i.tag||'')).toLowerCase().includes(q));
+      return [...a].sort((x,y)=>this.isOverdue(y)-this.isOverdue(x));
+    },
+    filteredCustomers(){
+      let a=this.customers; const q=this.custSearch.trim().toLowerCase();
+      if(q) a=a.filter(c=>(c.companyName+c.contactPerson).toLowerCase().includes(q));
+      if(this.fPipeline) a=a.filter(c=>c.pipelineStatus===this.fPipeline);
+      return a;
+    },
+    totalSpent(){ return this.customers.reduce((s,c)=>s+(+c.totalBudgetSpent||0),0); },
+    totalRemaining(){ return this.customers.reduce((s,c)=>s+(+c.remainingBalance||0),0); },
+    maxSpent(){ return Math.max(0,...this.customers.map(c=>+c.totalBudgetSpent||0)); },
+    businessDist(){
+      const map={}; this.customers.forEach(c=>{ const b=c.businessType||'อื่นๆ'; map[b]=(map[b]||0)+1; });
+      return Object.keys(map).map(name=>({name,count:map[name]})).sort((a,b)=>b.count-a.count);
+    },
+  },
+
+  watch: {
+    influencers: { handler(){ this.save(); }, deep:true },
+    customers: { handler(){ this.save(); }, deep:true },
+  },
+
+  methods: {
+    go(id){ this.active=id; this.mobileNav=false; },
+    fmt(n){ return (Math.round(+n||0)).toLocaleString('en-US'); },
+    fmtFollowers(n){ n=+n||0; if(n>=1e6) return (n/1e6).toFixed(1).replace('.0','')+'M'; if(n>=1e3) return (n/1e3).toFixed(1).replace('.0','')+'K'; return n.toString(); },
+    stars(n){ n=+n||0; return '★'.repeat(n)+'☆'.repeat(5-n); },
+    mainFollowers(inf){ const p=inf.platforms.find(p=>p.name===inf.mainPlatform)||inf.platforms[0]; return p?p.followers:0; },
+    thDate(d){ if(!d) return '—'; const dt=new Date(d); return dt.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); },
+    daysSince(d){ if(!d) return 0; return Math.floor((Date.now()-new Date(d).getTime())/864e5); },
+    isOverdue(inf){ return inf.isPool && this.daysSince(inf.lastContactDate)>7 && ['รอการตอบกลับ','อ่านไม่ตอบ'].includes(inf.poolStatus); },
+    poolCount(s){ return this.poolInfluencers.filter(i=>i.poolStatus===s).length; },
+    infName(id){ const i=this.influencers.find(x=>x.id===id); return i?i.nickname:'—'; },
+    infCustomerName(id){ const c=this.customers.find(x=>x.id===id); return c?c.companyName:'—'; },
+
+    profileStatusClass(s){ return s==='Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'; },
+    poolStatusClass(s){ return { 'ติดต่อแล้ว':'bg-emerald-100 text-emerald-700','รอการตอบกลับ':'bg-amber-100 text-amber-700','อ่านไม่ตอบ':'bg-orange-100 text-orange-700','ติดต่ออีกครั้ง':'bg-sky-100 text-sky-700' }[s]||'bg-brand-50 text-brand-700'; },
+    pipelineClass(s){ return { 'New Customer':'bg-sky-100 text-sky-700','Lead':'bg-amber-100 text-amber-700','In-Conversation':'bg-violet-100 text-violet-700','Active Client':'bg-emerald-100 text-emerald-700' }[s]||'bg-brand-50 text-brand-700'; },
+
+    avatarColor(name){ const colors=['#f9a8d4','#fbcfe8','#f0abfc','#c4b5fd','#a5b4fc','#fda4af','#fca5a5','#fdba74']; let h=0; for(const ch of (name||'?')) h=ch.charCodeAt(0)+((h<<5)-h); return colors[Math.abs(h)%colors.length]; },
+    avatarHtml(inf, size, big){
+      const px=size*4; const name=inf.nickname||inf.fullName||'?';
+      const initials=name.trim().slice(0,2);
+      const ring = big ? 'box-shadow:0 0 0 4px #fff;' : '';
+      if(inf.avatar){
+        return `<img src="${inf.avatar}" style="width:${px}px;height:${px}px;${ring}" class="rounded-2xl object-cover" onerror="this.style.display='none'">`;
+      }
+      return `<div style="width:${px}px;height:${px}px;background:${this.avatarColor(name)};${ring}" class="rounded-2xl flex items-center justify-center text-white font-700" >${initials}</div>`;
+    },
+
+    clearFilter(){ this.fTier=this.fPlatform=this.fCategory=this.fRate=''; },
+
+    openProfile(inf){ this.profile=inf; this.form=null; },
+
+    blankInfluencer(isPool){
+      return { id:null, isPool, fullName:'', nickname:'', avatar:'', category:'Lifestyle', tier:'Micro',
+        mainPlatform:'Instagram', startingRate:0, rating:5,
+        contact:{line:'',email:'',tel:''}, address:'', driveLink:'', canTravel:false,
+        platforms:[{name:'Instagram',url:'',followers:0,engagement:0,contentType:''}],
+        rateCard:[{service:'ภาพนิ่ง 1 โพสต์',price:0,condition:''}],
+        history:[], teamNote:'',
+        profileStatus:'Active', campaignStatus:'Proposed',
+        poolStatus:'ติดต่อแล้ว', lastContactDate:daysAgo(0), tag:'' };
+    },
+    openForm(inf,isPool){
+      this.profile=null;
+      this.form = inf ? JSON.parse(JSON.stringify(inf)) : this.blankInfluencer(isPool);
+      if(inf) this.form.isPool = isPool;
+    },
+    saveForm(){
+      if(!this.form.nickname.trim()){ this.notify('กรุณากรอกชื่อในวงการ/ชื่อเล่น'); return; }
+      const f=this.form;
+      if(f.id){ const idx=this.influencers.findIndex(i=>i.id===f.id); if(idx>-1) this.influencers.splice(idx,1,f); }
+      else { f.id='inf_'+Date.now(); this.influencers.push(f); }
+      this.notify('บันทึกข้อมูลแล้ว');
+      this.form=null;
+    },
+    remove(id){ if(confirm('ยืนยันลบรายชื่อนี้?')){ this.influencers=this.influencers.filter(i=>i.id!==id);
+      this.customers.forEach(c=>{ c.influencerHistory=c.influencerHistory.filter(x=>x!==id); });
+      this.deleteInfluencer(id); this.notify('ลบแล้ว'); } },
+    promoteToMain(inf){ if(confirm(`ดึง "${inf.nickname}" เข้าคลังหลัก?`)){ inf.isPool=false; inf.profileStatus='In-Conversation'; this.notify('ย้ายเข้าคลังหลักแล้ว'); } },
+
+    openCustomerForm(c){
+      this.custForm = c ? JSON.parse(JSON.stringify(c)) : {
+        id:null, companyName:'', businessType:'', contactPerson:'', tel:'', email:'', leadSource:'',
+        servicesInterested:[], hasAsset:false, hasGenCode:false, influencerHistory:[],
+        totalBudgetSpent:0, remainingBalance:0, type:'Lead', pipelineStatus:'New Customer' };
+    },
+    saveCustomer(){
+      if(!this.custForm.companyName.trim()){ this.notify('กรุณากรอกชื่อบริษัท/ลูกค้า'); return; }
+      const f=this.custForm;
+      if(f.id){ const idx=this.customers.findIndex(c=>c.id===f.id); if(idx>-1) this.customers.splice(idx,1,f); }
+      else { f.id='cus_'+Date.now(); this.customers.push(f); }
+      this.notify('บันทึกลูกค้าแล้ว'); this.custForm=null;
+    },
+    removeCustomer(id){ if(confirm('ยืนยันลบลูกค้ารายนี้?')){ this.customers=this.customers.filter(c=>c.id!==id); this.deleteCustomer(id); this.notify('ลบแล้ว'); } },
+
+    notify(msg){ this.toast=msg; clearTimeout(this._t); this._t=setTimeout(()=>this.toast='',2200); },
+
+    async save(){
+      try{
+        const sb = window._sb;
+        // upsert influencers
+        for(const inf of this.influencers){
+          await sb.from('influencers').upsert({ id: inf.id, data: inf }, { onConflict: 'id' });
+        }
+        // upsert customers
+        for(const c of this.customers){
+          await sb.from('customers').upsert({ id: c.id, data: c }, { onConflict: 'id' });
+        }
+        // also keep localStorage as fallback
+        try{ localStorage.setItem('bellhouse_v1', JSON.stringify({ influencers:this.influencers, customers:this.customers })); }catch(e){}
+      }catch(e){ console.error('save error',e); }
+    },
+    async load(){
+      try{
+        const sb = window._sb;
+        const [infRes, cusRes] = await Promise.all([
+          sb.from('influencers').select('id,data').order('data->fullName'),
+          sb.from('customers').select('id,data').order('data->companyName'),
+        ]);
+        if(infRes.data && infRes.data.length){
+          this.influencers = infRes.data.map(r => ({ ...r.data, id: r.id }));
+          this.customers = (cusRes.data||[]).map(r => ({ ...r.data, id: r.id }));
+          return true;
+        }
+      }catch(e){ console.error('load error',e); }
+      // fallback localStorage
+      try{ const raw=localStorage.getItem('bellhouse_v1');
+        if(raw){ const d=JSON.parse(raw); this.influencers=d.influencers||[]; this.customers=d.customers||[]; return true; }
+      }catch(e){}
+      return false;
+    },
+    async deleteInfluencer(id){
+      try{ await window._sb.from('influencers').delete().eq('id', id); }catch(e){}
+    },
+    async deleteCustomer(id){
+      try{ await window._sb.from('customers').delete().eq('id', id); }catch(e){}
+    },
+
+    backup(){
+      const data={ exportedAt:new Date().toISOString(), influencers:this.influencers, customers:this.customers };
+      const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob); const a=document.createElement('a');
+      a.href=url; a.download='bellhouse-backup-'+new Date().toISOString().slice(0,10)+'.json';
+      a.click(); URL.revokeObjectURL(url); this.notify('ดาวน์โหลดไฟล์สำรองแล้ว');
+    },
+    handleImport(e){
+      const file=e.target.files[0]; if(!file) return;
+      const reader=new FileReader();
+      reader.onload=()=>{ try{ const d=JSON.parse(reader.result);
+        if(!d.influencers && !d.customers) throw 0;
+        if(confirm('นำเข้าข้อมูลนี้จะแทนที่ข้อมูลปัจจุบันทั้งหมด ยืนยันหรือไม่?')){
+          this.influencers=d.influencers||[]; this.customers=d.customers||[]; this.notify('นำเข้าข้อมูลสำเร็จ'); }
+      }catch(err){ this.notify('ไฟล์ไม่ถูกต้อง'); } e.target.value=''; };
+      reader.readAsText(file);
+    },
+
+    seed(){
+      const C=(id,o)=>Object.assign({id,servicesInterested:[],hasAsset:false,hasGenCode:false,influencerHistory:[],totalBudgetSpent:0,remainingBalance:0,type:'Lead',pipelineStatus:'New Customer'},o);
+      this.customers=[
+        C('cus_glow',{ companyName:'Glow Cosmetics', businessType:'Beauty', contactPerson:'คุณแพรว', tel:'081-234-5678', email:'praew@glow.co.th', leadSource:'Instagram', servicesInterested:['IG','TikTok'], hasAsset:true, hasGenCode:true, totalBudgetSpent:185000, remainingBalance:25000, type:'Customer', pipelineStatus:'Active Client', influencerHistory:['inf_manow','inf_pinky'] }),
+        C('cus_fresh',{ companyName:'FreshBite Foods', businessType:'Food & Beverage', contactPerson:'คุณต้น', tel:'089-876-5432', email:'ton@freshbite.com', leadSource:'แนะนำต่อ', servicesInterested:['TikTok','YouTube'], hasAsset:true, hasGenCode:false, totalBudgetSpent:142000, remainingBalance:0, type:'Customer', pipelineStatus:'Active Client', influencerHistory:['inf_bear'] }),
+        C('cus_tech',{ companyName:'TechNova Gadgets', businessType:'Technology', contactPerson:'คุณเจมส์', tel:'082-111-2233', email:'james@technova.io', leadSource:'เว็บไซต์', servicesInterested:['YouTube','Facebook'], hasAsset:false, hasGenCode:true, totalBudgetSpent:78000, remainingBalance:39000, type:'Customer', pipelineStatus:'In-Conversation', influencerHistory:['inf_captain'] }),
+        C('cus_wander',{ companyName:'Wanderlust Travel', businessType:'Travel', contactPerson:'คุณฟ้า', tel:'086-555-7788', email:'fah@wanderlust.travel', leadSource:'Facebook', servicesInterested:['IG','YouTube'], hasAsset:true, hasGenCode:false, totalBudgetSpent:0, remainingBalance:0, type:'Lead', pipelineStatus:'Lead', influencerHistory:[] }),
+      ];
+
+      const I=(id,o)=>Object.assign({ id, isPool:false, avatar:'', address:'', driveLink:'', canTravel:false,
+        contact:{line:'',email:'',tel:''}, platforms:[], rateCard:[], history:[], teamNote:'',
+        profileStatus:'Active', campaignStatus:'Proposed', poolStatus:'ติดต่อแล้ว', lastContactDate:daysAgo(0), tag:'' }, o);
+
+      this.influencers=[
+        I('inf_manow',{ fullName:'มนัสนันท์ ใจดี', nickname:'มะนาว Beauty', category:'Beauty', tier:'Micro', mainPlatform:'Instagram', startingRate:8000, rating:5, canTravel:true,
+          contact:{line:'manow_bb', email:'manow.beauty@gmail.com', tel:'080-111-2222'}, address:'เขตห้วยขวาง กรุงเทพฯ 10310', driveLink:'https://drive.google.com',
+          platforms:[{name:'Instagram',url:'https://instagram.com',followers:48000,engagement:6.2,contentType:'รีวิวสกินแคร์'},{name:'TikTok',url:'https://tiktok.com',followers:32000,engagement:9.1,contentType:'แต่งหน้าสั้น'}],
+          rateCard:[{service:'ภาพนิ่ง 1 โพสต์ IG',price:8000,condition:'รวมแก้ 2 ครั้ง'},{service:'Reels / TikTok',price:15000,condition:'15-30 วิ'},{service:'Story 3 สไลด์',price:4000,condition:''}],
+          profileStatus:'Active', campaignStatus:'Published',
+          history:[{brand:'Glow Cosmetics', date:'มี.ค. 2025', link:'https://instagram.com', clientId:'cus_glow', note:'งานเสร็จตรงเวลา ยอด engage ดีมาก'}],
+          teamNote:'ทำงานตรงเวลา สื่อสารง่าย แนะนำ' }),
+
+        I('inf_bear',{ fullName:'ภีมพล กินเก่ง', nickname:'พี่หมี Bear Eats', category:'Food', tier:'Macro', mainPlatform:'TikTok', startingRate:25000, rating:4, canTravel:true,
+          contact:{line:'bear.eats', email:'bear@beareats.com', tel:'081-333-4444'}, address:'เขตจตุจักร กรุงเทพฯ 10900',
+          platforms:[{name:'TikTok',url:'https://tiktok.com',followers:520000,engagement:7.8,contentType:'รีวิวร้านอาหาร'},{name:'YouTube',url:'https://youtube.com',followers:180000,engagement:4.5,contentType:'Vlog กิน'}],
+          rateCard:[{service:'TikTok 1 คลิป',price:25000,condition:'ลงค้าง 6 เดือน'},{service:'YouTube คลิปยาว',price:45000,condition:'5-8 นาที'}],
+          profileStatus:'Active', campaignStatus:'Paid & Completed',
+          history:[{brand:'FreshBite Foods', date:'ก.พ. 2025', link:'https://tiktok.com', clientId:'cus_fresh', note:'ยอดวิวทะลุ 1.2M'}],
+          teamNote:'คิวแน่น ต้องจองล่วงหน้า 3 สัปดาห์' }),
+
+        I('inf_captain',{ fullName:'กิตติศักดิ์ เทคโน', nickname:'กัปตัน Tech', category:'Tech', tier:'Micro', mainPlatform:'YouTube', startingRate:18000, rating:5, canTravel:false,
+          contact:{line:'captaintech', email:'captain@techreview.th', tel:'089-555-6666'},
+          platforms:[{name:'YouTube',url:'https://youtube.com',followers:95000,engagement:5.3,contentType:'รีวิวแกดเจ็ต'},{name:'Facebook',url:'https://facebook.com',followers:42000,engagement:3.1,contentType:'ข่าวไอที'}],
+          rateCard:[{service:'YouTube รีวิวเต็ม',price:30000,condition:'10 นาทีขึ้นไป'},{service:'Short / Reels',price:18000,condition:''}],
+          profileStatus:'In-Conversation', campaignStatus:'Contract Signed',
+          history:[{brand:'TechNova Gadgets', date:'พ.ค. 2025', link:'https://youtube.com', clientId:'cus_tech', note:'รีวิวละเอียดดี แต่ส่งงานช้า 2 วัน'}],
+          teamNote:'รีวิวคุณภาพสูง แต่ต้องเผื่อเวลาส่งงาน' }),
+
+        I('inf_fern',{ fullName:'เฟิร์น ลีลาวดี', nickname:'ใบเฟิร์น', category:'Lifestyle', tier:'Nano', mainPlatform:'Instagram', startingRate:3500, rating:4, canTravel:true,
+          contact:{line:'fernnn', email:'fern.life@gmail.com', tel:'085-777-8888'}, address:'อ.เมือง เชียงใหม่ 50000',
+          platforms:[{name:'Instagram',url:'https://instagram.com',followers:8900,engagement:11.4,contentType:'ไลฟ์สไตล์ มินิมอล'}],
+          rateCard:[{service:'ภาพนิ่ง 1 โพสต์',price:3500,condition:''},{service:'Story',price:1500,condition:''}],
+          profileStatus:'Active', campaignStatus:'Proposed',
+          history:[], teamNote:'น้องใหม่ engagement สูง น่าลองงานเล็ก' }),
+
+        I('inf_tono',{ fullName:'โตโน่ ท่องโลก', nickname:'Tono Travel', category:'Travel', tier:'Macro', mainPlatform:'YouTube', startingRate:35000, rating:5, canTravel:true,
+          contact:{line:'tonotravel', email:'tono@travelth.com', tel:'088-999-0000'},
+          platforms:[{name:'YouTube',url:'https://youtube.com',followers:340000,engagement:6.0,contentType:'รีวิวที่เที่ยว'},{name:'Instagram',url:'https://instagram.com',followers:210000,engagement:4.8,contentType:'ภาพทริป'}],
+          rateCard:[{service:'YouTube ทริปเต็ม',price:60000,condition:'ออกทริป 2-3 วัน'},{service:'IG ชุดภาพ',price:35000,condition:'5 ภาพ'}],
+          profileStatus:'Active', campaignStatus:'Product Sent',
+          history:[{brand:'Wanderlust Travel', date:'ม.ค. 2025', link:'https://youtube.com', clientId:'cus_wander', note:'ทริปกระบี่ ยอดดีมาก'}],
+          teamNote:'มืออาชีพ ภาพสวย คุ้มราคา' }),
+
+        I('inf_pinky',{ fullName:'พิ้งกี้ แฟชั่นนิสต้า', nickname:'Pinky Fashion', category:'Fashion', tier:'Mega', mainPlatform:'Instagram', startingRate:80000, rating:5, canTravel:true,
+          contact:{line:'pinky.official', email:'mgmt@pinky.com', tel:'02-123-4567'}, address:'เขตวัฒนา กรุงเทพฯ 10110', driveLink:'https://drive.google.com',
+          platforms:[{name:'Instagram',url:'https://instagram.com',followers:1250000,engagement:3.4,contentType:'แฟชั่น & ลุค'},{name:'TikTok',url:'https://tiktok.com',followers:890000,engagement:5.6,contentType:'OOTD'}],
+          rateCard:[{service:'IG 1 โพสต์',price:80000,condition:'ผ่านเอเจนซี่'},{service:'TikTok 1 คลิป',price:120000,condition:''},{service:'Exclusive Campaign',price:300000,condition:'ดีลรายเดือน'}],
+          profileStatus:'Active', campaignStatus:'Draft Reviewing',
+          history:[{brand:'Glow Cosmetics', date:'เม.ย. 2025', link:'https://instagram.com', clientId:'cus_glow', note:'งานใหญ่ ภาพลักษณ์พรีเมียม'}],
+          teamNote:'เรทสูง ติดต่อผ่านเอเจนซี่เท่านั้น' }),
+
+        // ----- POOL -----
+        I('inf_earth',{ isPool:true, fullName:'เอิร์ธ เกมเมอร์', nickname:'น้องเอิร์ธ Gaming', category:'Gaming', tier:'Micro', mainPlatform:'YouTube', startingRate:12000, rating:4,
+          tag:'สายเกม/รีวิว', poolStatus:'รอการตอบกลับ', lastContactDate:daysAgo(10),
+          contact:{line:'earth_gg', email:'earth@gamer.com', tel:'080-222-3333'},
+          platforms:[{name:'YouTube',url:'https://youtube.com',followers:67000,engagement:8.2,contentType:'รีวิวเกมมือถือ'},{name:'TikTok',url:'https://tiktok.com',followers:45000,engagement:10.5,contentType:'คลิปเกมสั้น'}],
+          rateCard:[{service:'YouTube รีวิวเกม',price:20000,condition:''},{service:'TikTok',price:12000,condition:''}],
+          teamNote:'ทักไป 10 วันแล้วยังเงียบ ลองทักซ้ำ' }),
+
+        I('inf_cream',{ isPool:true, fullName:'ครีม คาเฟ่ฮอปเปอร์', nickname:'ครีม Cafe', category:'Food', tier:'Nano', mainPlatform:'Instagram', startingRate:4000, rating:5,
+          tag:'สายคาเฟ่', poolStatus:'อ่านไม่ตอบ', lastContactDate:daysAgo(8),
+          contact:{line:'cream.cafe', email:'cream@cafe.com', tel:'081-444-5555'},
+          platforms:[{name:'Instagram',url:'https://instagram.com',followers:9800,engagement:9.8,contentType:'รีวิวคาเฟ่'}],
+          rateCard:[{service:'IG 1 โพสต์',price:4000,condition:''}],
+          teamNote:'อ่านแล้วไม่ตอบ อาจลองส่ง email แทน' }),
+
+        I('inf_bank',{ isPool:true, fullName:'แบงค์ ฟิตเนส', nickname:'แบงค์ Fit', category:'Health', tier:'Micro', mainPlatform:'TikTok', startingRate:9000, rating:4,
+          tag:'สายสุขภาพ/ออกกำลังกาย', poolStatus:'ติดต่อแล้ว', lastContactDate:daysAgo(2),
+          contact:{line:'bankfit', email:'bank@fit.com', tel:'089-666-7777'},
+          platforms:[{name:'TikTok',url:'https://tiktok.com',followers:78000,engagement:7.0,contentType:'ออกกำลังกาย'},{name:'Instagram',url:'https://instagram.com',followers:34000,engagement:5.2,contentType:'อาหารคลีน'}],
+          rateCard:[{service:'TikTok 1 คลิป',price:15000,condition:''},{service:'IG โพสต์',price:9000,condition:''}],
+          teamNote:'เพิ่งทักไป รอติดตามต่อ' }),
+      ];
+    },
+  },
+
+  async mounted(){
+    if(!await this.load()) this.seed();
+  }
+}).mount('#app');
+</script>
+<script>
+// ============ SUPABASE CONFIG ============
+const SUPABASE_URL = 'https://jxhxwssuzxjrkfnklqev.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Gzf3bbPX5BMdRU1BY3bVrA_qLi-q6Cq';
+
+const { createClient } = supabase;
+window._sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+  errEl.style.display = 'none';
+  btn.textContent = 'กำลังเข้าสู่ระบบ…';
+  btn.disabled = true;
+  const { error } = await window._sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    errEl.textContent = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+    errEl.style.display = 'block';
+    btn.textContent = 'เข้าสู่ระบบ';
+    btn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  await window._sb.auth.signOut();
+}
+
+// ============ AUTH GATE ============
+window._sb.auth.onAuthStateChange((event, session) => {
+  const loginScreen = document.getElementById('login-screen');
+  const appEl = document.getElementById('app');
+  if (session) {
+    loginScreen.style.display = 'none';
+    appEl.style.display = 'block';
+  } else {
+    loginScreen.style.display = 'flex';
+    appEl.style.display = 'none';
+  }
+});
+</script>
+</body>
+</html>
