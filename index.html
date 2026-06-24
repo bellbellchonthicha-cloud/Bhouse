@@ -894,6 +894,52 @@ tailwind.config = {
 </style>
 
 <script>
+// ============ SUPABASE CONFIG ============
+// ย้ายมาไว้ก่อนสคริปต์ของ Vue app เพราะ mounted() ของ Vue เรียกใช้ window._sb
+// ทันทีแบบ synchronous ตอน mount — ถ้านิยามไว้หลัง Vue app จะยังเป็น undefined อยู่
+// ทำให้ load()/save()/subscribeRealtime() พัง (เงียบๆ ผ่าน try/catch) แล้ว fallback
+// ไปใช้ localStorage ของเครื่องนั้นๆ เท่านั้น นี่คือสาเหตุหลักที่ข้อมูลไม่ sync ข้าม device/browser
+const SUPABASE_URL = 'https://jxhxwssuzxjrkfnklqev.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Gzf3bbPX5BMdRU1BY3bVrA_qLi-q6Cq';
+
+const { createClient } = supabase;
+window._sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+  errEl.style.display = 'none';
+  btn.textContent = 'กำลังเข้าสู่ระบบ…';
+  btn.disabled = true;
+  const { error } = await window._sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    errEl.textContent = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+    errEl.style.display = 'block';
+    btn.textContent = 'เข้าสู่ระบบ';
+    btn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  await window._sb.auth.signOut();
+}
+
+// ============ AUTH GATE ============
+window._sb.auth.onAuthStateChange((event, session) => {
+  const loginScreen = document.getElementById('login-screen');
+  const appEl = document.getElementById('app');
+  if (session) {
+    loginScreen.style.display = 'none';
+    appEl.style.display = 'block';
+  } else {
+    loginScreen.style.display = 'flex';
+    appEl.style.display = 'none';
+  }
+});
+</script>
+<script>
 const { createApp } = Vue;
 
 // ---------- helpers for seeding relative dates ----------
@@ -918,6 +964,8 @@ createApp({
       pipelineStatuses: ['New Customer','Lead','In-Conversation','Active Client'],
       influencers: [],
       customers: [],
+      _syncing: false,
+      _saveTimer: null,
       // ui state
       dirView: 'table',
       search:'', fTier:'', fPlatform:'', fCategory:'', fRate:'',
@@ -994,8 +1042,11 @@ createApp({
   },
 
   watch: {
-    influencers: { handler(){ this.save(); }, deep:true },
-    customers: { handler(){ this.save(); }, deep:true },
+    // _syncing เป็น true ตอนกำลังเซ็ตค่าจาก load()/realtime — ไม่ใช่จากการที่ผู้ใช้แก้ฟอร์มเอง
+    // จึงข้าม save() เพื่อกันลูป: save() เขียน Supabase -> เกิด realtime event -> เซ็ตค่ากลับมาที่ array
+    // -> watch เห็นว่าเปลี่ยน -> เรียก save() อีกรอบ -> วนซ้ำไม่จบ และอาจทับข้อมูลที่กำลังพิมพ์อยู่
+    influencers: { handler(){ if(!this._syncing) this.queueSave(); }, deep:true },
+    customers: { handler(){ if(!this._syncing) this.queueSave(); }, deep:true },
   },
 
   methods: {
@@ -1075,6 +1126,12 @@ createApp({
 
     notify(msg){ this.toast=msg; clearTimeout(this._t); this._t=setTimeout(()=>this.toast='',2200); },
 
+    // debounce: รอ 500ms ให้ผู้ใช้พิมพ์เสร็จก่อนค่อยยิงเขียน Supabase
+    // กันการยิง upsert รัวๆทุกตัวอักษรที่พิมพ์ (deep watch ทำให้ทุกการเปลี่ยนแปลง trigger handler)
+    queueSave(){
+      clearTimeout(this._saveTimer);
+      this._saveTimer = setTimeout(()=>this.save(), 500);
+    },
     async save(){
       try{
         const sb = window._sb;
@@ -1098,14 +1155,17 @@ createApp({
           sb.from('customers').select('id,data').order('data->companyName'),
         ]);
         if(infRes.data && infRes.data.length){
+          // ตั้ง flag ก่อนเซ็ตค่า เพื่อไม่ให้ watch เห็นการเปลี่ยนนี้แล้วยิง save() กลับไปเขียนทับโดยไม่จำเป็น
+          this._syncing = true;
           this.influencers = infRes.data.map(r => ({ ...r.data, id: r.id }));
           this.customers = (cusRes.data||[]).map(r => ({ ...r.data, id: r.id }));
+          this.$nextTick(()=>{ this._syncing = false; });
           return true;
         }
       }catch(e){ console.error('load error',e); }
       // fallback localStorage
       try{ const raw=localStorage.getItem('bellhouse_v1');
-        if(raw){ const d=JSON.parse(raw); this.influencers=d.influencers||[]; this.customers=d.customers||[]; return true; }
+        if(raw){ const d=JSON.parse(raw); this._syncing = true; this.influencers=d.influencers||[]; this.customers=d.customers||[]; this.$nextTick(()=>{ this._syncing = false; }); return true; }
       }catch(e){}
       return false;
     },
@@ -1136,9 +1196,7 @@ createApp({
 
     async logout(){
       try {
-        const { createClient } = supabase;
-        const sb = createClient('https://jxhxwssuzxjrkfnklqev.supabase.co', 'sb_publishable_Gzf3bbPX5BMdRU1BY3bVrA_qLi-q6Cq');
-        await sb.auth.signOut();
+        await window._sb.auth.signOut();
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('app').style.display = 'none';
       } catch(e) {
@@ -1153,11 +1211,11 @@ createApp({
         .channel('db-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'influencers' }, async () => {
           const { data } = await window._sb.from('influencers').select('id,data');
-          if(data) vm.influencers = data.map(r => ({ ...r.data, id: r.id }));
+          if(data){ vm._syncing = true; vm.influencers = data.map(r => ({ ...r.data, id: r.id })); vm.$nextTick(()=>{ vm._syncing = false; }); }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, async () => {
           const { data } = await window._sb.from('customers').select('id,data');
-          if(data) vm.customers = data.map(r => ({ ...r.data, id: r.id }));
+          if(data){ vm._syncing = true; vm.customers = data.map(r => ({ ...r.data, id: r.id })); vm.$nextTick(()=>{ vm._syncing = false; }); }
         })
         .subscribe();
     },
@@ -1264,48 +1322,6 @@ createApp({
     });
   },
 }).mount('#app');
-</script>
-<script>
-// ============ SUPABASE CONFIG ============
-const SUPABASE_URL = 'https://jxhxwssuzxjrkfnklqev.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_Gzf3bbPX5BMdRU1BY3bVrA_qLi-q6Cq';
-
-const { createClient } = supabase;
-window._sb = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-async function doLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  const errEl = document.getElementById('login-error');
-  const btn = document.getElementById('login-btn');
-  errEl.style.display = 'none';
-  btn.textContent = 'กำลังเข้าสู่ระบบ…';
-  btn.disabled = true;
-  const { error } = await window._sb.auth.signInWithPassword({ email, password });
-  if (error) {
-    errEl.textContent = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
-    errEl.style.display = 'block';
-    btn.textContent = 'เข้าสู่ระบบ';
-    btn.disabled = false;
-  }
-}
-
-async function doLogout() {
-  await window._sb.auth.signOut();
-}
-
-// ============ AUTH GATE ============
-window._sb.auth.onAuthStateChange((event, session) => {
-  const loginScreen = document.getElementById('login-screen');
-  const appEl = document.getElementById('app');
-  if (session) {
-    loginScreen.style.display = 'none';
-    appEl.style.display = 'block';
-  } else {
-    loginScreen.style.display = 'flex';
-    appEl.style.display = 'none';
-  }
-});
 </script>
 </body>
 </html>
