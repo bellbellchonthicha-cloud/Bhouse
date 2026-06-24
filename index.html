@@ -1251,6 +1251,17 @@ createApp({
   async mounted(){
     if(!await this.load()) this.seed();
     this.subscribeRealtime();
+
+    // โหลดข้อมูลใหม่ทุกครั้งที่กลับมาที่ tab นี้
+    const vm = this;
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible') {
+        await vm.load();
+      }
+    });
+    window.addEventListener('focus', async () => {
+      await vm.load();
+    });
   },
 }).mount('#app');
 </script>
